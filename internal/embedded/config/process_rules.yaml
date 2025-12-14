@@ -1,0 +1,120 @@
+version: "2.1"
+description: "Argus Advanced Process & LoLBin Detection Rules"
+author: "Argus Security Team"
+last_updated: "2025-12-14"
+
+# ==============================================================================
+# 1. 离地攻击 (Living off the Land Binaries - LoLBins)
+# ==============================================================================
+# 攻击者利用系统自带的合法程序执行恶意操作
+lolbins:
+  # Certutil: 常用于下载文件或解码 Payload
+  - process: "certutil.exe"
+    command_pattern: "(?i)(-urlcache|-decode|-verifyctl|-encode)"
+    description: "Suspicious Certutil Usage (Download/Decode)"
+    level: high
+    mitre: "T1105"
+
+  # Rundll32: 加载恶意 DLL 或执行 JavaScript
+  - process: "rundll32.exe"
+    command_pattern: "(?i)(javascript:|vbscript:|url.dll|comsvcs.dll|iernonce.dll)"
+    description: "Suspicious Rundll32 Execution"
+    level: high
+    mitre: "T1218.011"
+
+  # Regsvr32: 远程加载 COM 对象 (Squiblydoo)
+  - process: "regsvr32.exe"
+    command_pattern: "(?i)(/s|/u|/i:.*http|scrobj.dll)"
+    description: "Regsvr32 Remote Scriptlet Execution"
+    level: critical
+    mitre: "T1218.010"
+
+  # Bitsadmin: 后台传输服务下载文件
+  - process: "bitsadmin.exe"
+    command_pattern: "(?i)(/transfer|/download|/addfile)"
+    description: "Bitsadmin File Download"
+    level: medium
+    mitre: "T1197"
+
+  # MSHTA: 执行 HTA 恶意脚本
+  - process: "mshta.exe"
+    command_pattern: "(?i)(javascript|vbscript|http://|https://|.hta)"
+    description: "Mshta Malicious Script Execution"
+    level: critical
+    mitre: "T1218.005"
+
+# ==============================================================================
+# 2. 凭据窃取与转储 (Credential Dumping)
+# ==============================================================================
+credential_theft:
+  # 通过 comsvcs.dll 转储 LSASS 内存 (非常经典的抓密码手法)
+  - process: "rundll32.exe"
+    command_pattern: "(?i)comsvcs.dll.*minidump"
+    description: "LSASS Memory Dumping via Comsvcs"
+    level: critical
+    mitre: "T1003.001"
+
+  # 注册表导出 SAM/System/Security
+  - process: "reg.exe"
+    command_pattern: "(?i)(save.*hklm\\\\sam|save.*hklm\\\\system|save.*hklm\\\\security)"
+    description: "Registry Hive Dumping (SAM/SYSTEM)"
+    level: critical
+    mitre: "T1003.002"
+
+  # Procdump (Sysinternals 工具被滥用)
+  - process: "procdump.exe"
+    command_pattern: "(?i)(lsass|-ma)"
+    description: "Procdump LSASS Extraction"
+    level: high
+    mitre: "T1003.001"
+
+# ==============================================================================
+# 3. 勒索软件前置行为 (Ransomware Precursors)
+# ==============================================================================
+ransomware_behavior:
+  # 删除卷影副本 (防止恢复)
+  - process: "vssadmin.exe"
+    command_pattern: "(?i)(delete.*shadows)"
+    description: "Volume Shadow Copy Deletion"
+    level: critical
+    mitre: "T1490"
+  
+  - process: "wbadmin.exe"
+    command_pattern: "(?i)(delete.*catalog|delete.*systemstatebackup)"
+    description: "Backup Catalog Deletion"
+    level: critical
+    mitre: "T1490"
+
+  - process: "bcdedit.exe"
+    command_pattern: "(?i)(recoveryenabled.*no|bootstatuspolicy.*ignoreallfailures)"
+    description: "Boot Configuration Modification"
+    level: high
+    mitre: "T1490"
+
+# ==============================================================================
+# 4. 异常父子进程关系 (Suspicious Parent-Child)
+# ==============================================================================
+# 这种检测方式误报率极低，是检测钓鱼宏病毒的神器
+suspicious_parents:
+  # Office 启动 Shell
+  - parent: "winword.exe"
+    child: "(?i)(cmd.exe|powershell.exe|wscript.exe|cscript.exe)"
+    description: "Word spawning Shell (Macro Malware)"
+    level: critical
+
+  - parent: "excel.exe"
+    child: "(?i)(cmd.exe|powershell.exe|wscript.exe|cscript.exe)"
+    description: "Excel spawning Shell (Macro Malware)"
+    level: critical
+    
+  - parent: "powerpnt.exe"
+    child: "(?i)(cmd.exe|powershell.exe|wscript.exe|cscript.exe)"
+    description: "PowerPoint spawning Shell"
+    level: critical
+
+  # Web Server 启动 Shell (Webshell 特征)
+  - parent: "(?i)(w3wp.exe|httpd.exe|nginx.exe|tomcat.exe|java.exe)"
+    child: "(?i)(cmd.exe|powershell.exe|whoami.exe|net.exe|ipconfig.exe)"
+    description: "Web Server spawning Shell/Recon Tool (Webshell Activity)"
+    level: critical
+    mitre: "T1505.003"

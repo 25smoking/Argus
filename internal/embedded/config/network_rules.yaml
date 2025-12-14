@@ -1,0 +1,83 @@
+version: "2.1"
+description: "Argus Advanced Network Anomaly Rules"
+author: "Argus Security Team"
+last_updated: "2025-12-14"
+
+# ==============================================================================
+# 1. 异常进程网络行为 (Process-Network Anomalies)
+# ==============================================================================
+# 定义哪些进程“绝不应该”连接互联网
+# 这是检测注入类木马最有效的方法之一
+unexpected_network_processes:
+  - process: "notepad.exe"
+    description: "Notepad connecting to network (Injection Indicator)"
+    level: critical
+  
+  - process: "calc.exe"
+    description: "Calculator connecting to network"
+    level: critical
+
+  - process: "mspaint.exe"
+    description: "Paint connecting to network"
+    level: critical
+
+  # 只有在特定环境下 lsass 才会有流量，通常对外连极度危险
+  - process: "lsass.exe"
+    description: "LSASS connecting to internet (Potential Credential Exfiltration)"
+    allow_local_subnet: true # 允许内网通信 (AD 环境)
+    level: high
+    
+  - process: "winlogon.exe"
+    description: "Winlogon connecting to internet"
+    level: high
+
+# ==============================================================================
+# 2. 威胁情报与 C2 特征 (Threat Intel & C2)
+# ==============================================================================
+malicious_ports:
+  # 经典木马端口
+  - port: 4444
+    protocol: "tcp"
+    description: "Metasploit Default Listener"
+    level: critical
+
+  - port: 445
+    protocol: "tcp"
+    direction: "outbound" # 主动对外连接 445 (SMB) 通常是蠕虫传播行为
+    description: "Outbound SMB (Worm/Lateral Movement)"
+    level: high
+
+  - port: 3389
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Outbound RDP (Potential Data Exfiltration via RDP)"
+    level: medium
+
+  - port: 6667
+    protocol: "tcp"
+    description: "IRC Protocol (Legacy Botnets)"
+    level: medium
+
+# ==============================================================================
+# 3. 域名与 URL 特征 (Domain Patterns)
+# ==============================================================================
+suspicious_domains:
+  # 动态域名，常用于临时 C2
+  - pattern: "(?i)\\.(duckdns\\.org|no-ip\\.com|no-ip\\.org|3322\\.org|f3322\\.net)$"
+    description: "Dynamic DNS Provider"
+    level: medium
+
+  # 免费域名，滥用率高
+  - pattern: "(?i)\\.(tk|ml|ga|cf|gq)$"
+    description: "Free TLD (High Abuse Rate)"
+    level: medium
+
+  # 隧道工具
+  - pattern: "(?i)\\.(ngrok\\.io|portmap\\.io|localtunnel\\.me)$"
+    description: "Tunneling Service (Bypassing Firewall)"
+    level: high
+
+  # 挖矿矿池 (示例)
+  - pattern: "(?i)(pool|mine|monero|xmrig)"
+    description: "Cryptomining Pool Keyword"
+    level: high
