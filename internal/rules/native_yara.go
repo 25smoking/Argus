@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	yara "github.com/hillu/go-yara/v4"
+	yara_x "github.com/VirusTotal/yara-x/go"
 )
 
 type nativeScanner struct {
-	rulesets []*yara.Rules
+	rulesets []*yara_x.Rules
 	count    int
 	stats    map[string]*RuleLoadStat
 }
@@ -23,7 +23,7 @@ func (s *nativeScanner) Count() int {
 }
 
 func (s *nativeScanner) Engine() string {
-	return "libyara"
+	return "yara-x"
 }
 
 func (s *nativeScanner) Stats() []RuleLoadStat {
@@ -55,19 +55,17 @@ func (s *nativeScanner) scan(path string, content []byte) []string {
 	var matches []string
 	seen := make(map[string]bool)
 	for _, ruleset := range s.rulesets {
-		scanner, err := yara.NewScanner(ruleset)
+		scanner := yara_x.NewScanner(ruleset)
+		defineScanVariables(scanner, path)
+		scanResults, err := scanner.Scan(content)
+		scanner.Destroy()
 		if err != nil {
 			continue
 		}
-		defineScanVariables(scanner, path)
-		var matched yara.MatchRules
-		if err := scanner.SetCallback(&matched).ScanMem(content); err != nil {
-			continue
-		}
-		for _, item := range matched {
-			name := item.Rule
-			if item.Namespace != "" && item.Namespace != "default" {
-				name = item.Namespace + "." + item.Rule
+		for _, item := range scanResults.MatchingRules() {
+			name := item.Identifier()
+			if item.Namespace() != "" && item.Namespace() != "default" {
+				name = item.Namespace() + "." + item.Identifier()
 			}
 			if !seen[name] {
 				matches = append(matches, name)
@@ -83,7 +81,7 @@ func loadNativeScannerFromDir(root, group string) (Scanner, error) {
 	if err != nil {
 		return nil, err
 	}
-	var compiled []*yara.Rules
+	var compiled []*yara_x.Rules
 	var count int
 	var skipped int
 	stats := make(map[string]*RuleLoadStat)
@@ -97,31 +95,19 @@ func loadNativeScannerFromDir(root, group string) (Scanner, error) {
 			addSkippedStat(stats, category, 1)
 			return nil
 		}
-		compiler, err := newNativeCompiler(rootAbs, path)
-		if err != nil {
-			return err
-		}
-		f, err := os.Open(path)
+		body, err := os.ReadFile(path)
 		if err != nil {
 			skipped++
 			addSkippedStat(stats, category, 1)
 			return nil
 		}
-		err = compiler.AddFile(f, namespaceFromPath(rootAbs, path))
-		_ = f.Close()
-		if err != nil {
-			skipped++
-			addSkippedStat(stats, category, 1)
-			return nil
-		}
-		rules, err := compiler.GetRules()
-		if err != nil {
+		rules, ruleCount, err := compileYARAXSource(string(body), namespaceFromPath(rootAbs, path), path, rootAbs, filepath.Dir(path))
+		if err != nil && ruleCount == 0 {
 			skipped++
 			addSkippedStat(stats, category, 1)
 			return nil
 		}
 		compiled = append(compiled, rules)
-		ruleCount := len(rules.GetRules())
 		count += ruleCount
 		addLoadedStat(stats, category, 1, ruleCount)
 		return nil
@@ -130,16 +116,16 @@ func loadNativeScannerFromDir(root, group string) (Scanner, error) {
 		return nil, err
 	}
 	if len(compiled) == 0 {
-		return nil, fmt.Errorf("libyara 没有成功编译任何规则，跳过 %d 个文件", skipped)
+		return nil, fmt.Errorf("YARA-X 没有成功编译任何规则，跳过 %d 个文件", skipped)
 	}
 	if skipped > 0 {
-		fmt.Printf("libyara 已跳过 %d 个不兼容规则文件\n", skipped)
+		fmt.Printf("YARA-X 已跳过 %d 个不兼容规则文件\n", skipped)
 	}
 	return &nativeScanner{rulesets: compiled, count: count, stats: stats}, nil
 }
 
 func loadNativeScannerFromFS(fsys fs.FS, root, group string) (Scanner, error) {
-	var compiled []*yara.Rules
+	var compiled []*yara_x.Rules
 	var count int
 	var skipped int
 	stats := make(map[string]*RuleLoadStat)
@@ -159,23 +145,13 @@ func loadNativeScannerFromFS(fsys fs.FS, root, group string) (Scanner, error) {
 			addSkippedStat(stats, category, 1)
 			return nil
 		}
-		compiler, err := newNativeCompilerForFS(fsys, root)
-		if err != nil {
-			return err
-		}
-		if err := compiler.AddString(string(body), namespaceFromPath(root, path)); err != nil {
-			skipped++
-			addSkippedStat(stats, category, 1)
-			return nil
-		}
-		rules, err := compiler.GetRules()
-		if err != nil {
+		rules, ruleCount, err := compileYARAXSource(string(body), namespaceFromPath(root, path), path, "")
+		if err != nil && ruleCount == 0 {
 			skipped++
 			addSkippedStat(stats, category, 1)
 			return nil
 		}
 		compiled = append(compiled, rules)
-		ruleCount := len(rules.GetRules())
 		count += ruleCount
 		addLoadedStat(stats, category, 1, ruleCount)
 		return nil
@@ -184,80 +160,67 @@ func loadNativeScannerFromFS(fsys fs.FS, root, group string) (Scanner, error) {
 		return nil, err
 	}
 	if len(compiled) == 0 {
-		return nil, fmt.Errorf("libyara 没有成功编译任何内置规则，跳过 %d 个文件", skipped)
+		return nil, fmt.Errorf("YARA-X 没有成功编译任何内置规则，跳过 %d 个文件", skipped)
 	}
 	return &nativeScanner{rulesets: compiled, count: count, stats: stats}, nil
 }
 
-func newNativeCompiler(root, currentFile string) (*yara.Compiler, error) {
-	compiler, err := yara.NewCompiler()
-	if err != nil {
-		return nil, err
+func compileYARAXSource(source, namespace, origin string, includeDirs ...string) (*yara_x.Rules, int, error) {
+	options := []yara_x.CompileOption{
+		yara_x.RelaxedReSyntax(true),
+		yara_x.ConditionOptimization(true),
+		yara_x.Globals(defaultYARAXGlobals("")),
 	}
-	defineCompileVariables(compiler)
-	compiler.SetIncludeCallback(func(name, filename, namespace string) []byte {
-		candidates := []string{
-			filepath.Join(filepath.Dir(currentFile), name),
-			filepath.Join(root, name),
+	seenDirs := make(map[string]bool)
+	for _, dir := range includeDirs {
+		if dir == "" {
+			continue
 		}
-		if filename != "" {
-			candidates = append([]string{filepath.Join(filepath.Dir(filename), name)}, candidates...)
+		cleaned, err := filepath.Abs(dir)
+		if err != nil {
+			cleaned = dir
 		}
-		for _, candidate := range candidates {
-			cleaned, err := filepath.Abs(candidate)
-			if err != nil || !strings.HasPrefix(cleaned, root+string(os.PathSeparator)) {
-				continue
-			}
-			data, err := os.ReadFile(cleaned)
-			if err == nil {
-				return data
-			}
+		if seenDirs[cleaned] {
+			continue
 		}
-		return nil
-	})
-	return compiler, nil
-}
-
-func newNativeCompilerForFS(fsys fs.FS, root string) (*yara.Compiler, error) {
-	compiler, err := yara.NewCompiler()
-	if err != nil {
-		return nil, err
+		seenDirs[cleaned] = true
+		options = append(options, yara_x.IncludeDir(cleaned))
 	}
-	defineCompileVariables(compiler)
-	compiler.SetIncludeCallback(func(name, filename, namespace string) []byte {
-		candidates := []string{filepath.ToSlash(filepath.Join(root, name))}
-		if filename != "" {
-			candidates = append([]string{filepath.ToSlash(filepath.Join(filepath.Dir(filename), name))}, candidates...)
-		}
-		for _, candidate := range candidates {
-			data, err := fs.ReadFile(fsys, candidate)
-			if err == nil {
-				return data
-			}
-		}
-		return nil
-	})
-	return compiler, nil
+	compiler, err := yara_x.NewCompiler(options...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer compiler.Destroy()
+	compiler.NewNamespace(namespace)
+	addErr := compiler.AddSource(source, yara_x.WithOrigin(origin))
+	rules := compiler.Build()
+	count := rules.Count()
+	if addErr != nil && count == 0 {
+		rules.Destroy()
+		return nil, 0, addErr
+	}
+	return rules, count, addErr
 }
 
-func defineCompileVariables(compiler *yara.Compiler) {
-	_ = compiler.DefineVariable("filepath", "")
-	_ = compiler.DefineVariable("filename", "")
-	_ = compiler.DefineVariable("extension", "")
-	_ = compiler.DefineVariable("filetype", "")
+func defineScanVariables(scanner *yara_x.Scanner, path string) {
+	for name, value := range defaultYARAXGlobals(path) {
+		_ = scanner.SetGlobal(name, value)
+	}
 }
 
-func defineScanVariables(scanner *yara.Scanner, path string) {
+func defaultYARAXGlobals(path string) map[string]interface{} {
 	filename := ""
 	extension := ""
 	if path != "" {
 		filename = filepath.Base(path)
 		extension = strings.TrimPrefix(strings.ToLower(filepath.Ext(path)), ".")
 	}
-	_ = scanner.DefineVariable("filepath", path)
-	_ = scanner.DefineVariable("filename", filename)
-	_ = scanner.DefineVariable("extension", extension)
-	_ = scanner.DefineVariable("filetype", extension)
+	return map[string]interface{}{
+		"filepath":  path,
+		"filename":  filename,
+		"extension": extension,
+		"filetype":  extension,
+	}
 }
 
 func namespaceFromPath(root, path string) string {

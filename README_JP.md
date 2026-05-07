@@ -100,12 +100,12 @@ make build
 make checksums
 ```
 
-Argus は完全な libyara エンジンを使用します。ビルド前に libyara と pkg-config をインストールしてください。
+Argus は YARA-X Go binding を使用します。ビルド前に YARA-X CAPI と pkg-config をインストールしてください。
 
 ```bash
 # macOS example
-brew install yara pkg-config
-CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
+brew install yara-x pkg-config
+CGO_ENABLED=1 go build -tags static_link -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
 ```
 
 リリースビルドでは `-trimpath`、シンボル削除、空の Go build id を使い、ローカルビルドパスの露出を減らします。
@@ -162,8 +162,8 @@ argus scan --module memory,stack --profile deep
 | `process` / `proc` | `ProcessScan` | `config/process_rules.yaml` 行動ルール | コマンドライン、親子プロセス、LoLBin、リバースシェル、認証情報ダンプ、復旧妨害 |
 | `network` / `net` | `NetworkScan` / `ThreatIntel` | `config/network_rules.yaml` 行動ルール。ThreatIntel は明示的なネットワーク/API が必要 | 通信、異常プロセス、ポート、ドメイン、接続急増 |
 | `file` | `FileScan` | `config/file_rules.yaml` 行動ルール | 権限、疑わしいパス、機密ファイル、起動項目、小ファイル内容 |
-| `malware` | `MalwareScan` | `.rule/malware_rules` の完全 libyara ルール | マルウェア、Hacktool、APT、ランサムウェア、バックドア |
-| `webshell` | `WebshellScan` | `.rule/webshell_rules` の完全 libyara ルール + エントロピー/キーワード補助 | Webshell と Web スクリプト検出 |
+| `malware` | `MalwareScan` | `.rule/malware_rules` の完全 YARA-X ルール | マルウェア、Hacktool、APT、ランサムウェア、バックドア |
+| `webshell` | `WebshellScan` | `.rule/webshell_rules` の完全 YARA-X ルール + エントロピー/キーワード補助 | Webshell と Web スクリプト検出 |
 | `memory` / `mem` | `MemoryScan` / `StackHunter` | Windows `MemoryScan` は `.rule/malware_rules` を再利用。`StackHunter` はヒューリスティック | 深度メモリ/スタック確認 |
 | `account` / `user` | アカウント系プラグイン | プラットフォーム API、`/etc/passwd`、ユーザー/グループのヒューリスティック | アカウントセキュリティ確認 |
 | `persist` | 永続化プラグイン | 内蔵 `persistence_rules.yaml`。`config/` で上書き可能 + API/ファイル位置 | レジストリ、サービス、起動項目、タスク |
@@ -305,7 +305,7 @@ argus:
 ### 2026-05-08 更新メモ
 
 - コマンド簡略化: `argus all`、`argus scan all`、`--module all`、`argus modules`。
-- ルール体系: デフォルト `.rule/`、`rules status/update/verify/list`、完全 libyara 連携。
+- ルール体系: デフォルト `.rule/`、`rules status/update/verify/list`、完全 YARA-X 連携。
 - 行動ルール: process/network/file YAML を拡張し、LoLBin、マイニング、プロキシトンネル、永続化、Webshell 行動を追加。
 - レポート: JSON/HTML にスキャンセッション、ルールソース、スキップモジュール、中国語ネットワークポリシー、DOT 攻撃グラフ情報を追加。
 - リリース工程: `-trimpath`、空 build id、バージョン注入、GitHub Actions リリースビルドを追加。

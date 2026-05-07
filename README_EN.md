@@ -100,12 +100,12 @@ make build
 make checksums
 ```
 
-Argus uses the full libyara engine. Install libyara and pkg-config before building:
+Argus uses the YARA-X Go binding. Install YARA-X CAPI and pkg-config before building:
 
 ```bash
 # macOS example
-brew install yara pkg-config
-CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
+brew install yara-x pkg-config
+CGO_ENABLED=1 go build -tags static_link -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
 ```
 
 Release builds should use `-trimpath`, stripped symbols, and an empty Go build id to reduce local build-path exposure.
@@ -162,8 +162,8 @@ Common module keywords:
 | `process` / `proc` | `ProcessScan` | `config/process_rules.yaml` behavior rules | Process command lines, parent-child relations, LoLBin abuse, reverse shells, credential dumping, recovery disruption |
 | `network` / `net` | `NetworkScan` / `ThreatIntel` | `config/network_rules.yaml` behavior rules; ThreatIntel requires explicit network/API access | Connections, suspicious processes, ports, domains, connection spikes |
 | `file` | `FileScan` | `config/file_rules.yaml` behavior rules | Permissions, suspicious paths, sensitive files, startup locations, small-file content patterns |
-| `malware` | `MalwareScan` | Full libyara rules in `.rule/malware_rules` | Malware, hacktools, APT, ransomware, backdoors |
-| `webshell` | `WebshellScan` | Full libyara rules in `.rule/webshell_rules` plus entropy/keyword fallback | Webshell and web script scanning |
+| `malware` | `MalwareScan` | Full YARA-X rules in `.rule/malware_rules` | Malware, hacktools, APT, ransomware, backdoors |
+| `webshell` | `WebshellScan` | Full YARA-X rules in `.rule/webshell_rules` plus entropy/keyword fallback | Webshell and web script scanning |
 | `memory` / `mem` | `MemoryScan` / `StackHunter` | Windows `MemoryScan` reuses `.rule/malware_rules`; `StackHunter` is heuristic | Deep memory and stack checks |
 | `account` / `user` | Account plugins | Platform APIs, `/etc/passwd`, user/group heuristics | Account security review |
 | `persist` | Persistence plugins | Built-in `persistence_rules.yaml`, overrideable under `config/`, plus platform APIs/files | Registry, services, startup items, scheduled tasks |
@@ -305,7 +305,7 @@ argus:
 ### 2026-05-08 Update Notes
 
 - Simplified commands: `argus all`, `argus scan all`, `--module all`, and `argus modules`.
-- Rule system: default `.rule/`, `rules status/update/verify/list`, and full libyara integration.
+- Rule system: default `.rule/`, `rules status/update/verify/list`, and full YARA-X integration.
 - Behavior rules: expanded process, network, and file YAML rules for LoLBin abuse, mining, proxy tunnels, persistence, and webshell behavior.
 - Reports: JSON/HTML now include scan session, rule source, skipped modules, Chinese network-policy text, and DOT attack graph metadata.
 - Release engineering: default builds use `-trimpath`, empty build id, version injection, and GitHub Actions release builds.

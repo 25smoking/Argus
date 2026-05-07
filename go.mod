@@ -4,7 +4,7 @@ go 1.24.0
 
 require (
 	github.com/0xrawsec/golang-evtx v1.2.9
-	github.com/hillu/go-yara/v4 v4.3.4
+	github.com/VirusTotal/yara-x/go v1.16.0
 	github.com/shirou/gopsutil/v3 v3.24.5
 	github.com/spf13/cobra v1.10.2
 	go.uber.org/zap v1.27.1
@@ -24,4 +24,5 @@ require (
 	github.com/tklauser/numcpus v0.11.0 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 	go.uber.org/multierr v1.11.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 )

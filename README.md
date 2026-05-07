@@ -119,17 +119,17 @@ make checksums
 go build -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
 ```
 
-Argus 主线使用完整 libyara 引擎，不再提供轻量 YARA 兼容模式。编译前需要先安装 libyara 和 pkg-config：
+Argus 主线使用 YARA-X Go binding，不再提供轻量 YARA 兼容模式。编译前需要先安装 YARA-X CAPI 和 pkg-config：
 
 ```bash
 # macOS 示例
-brew install yara pkg-config
-CGO_ENABLED=1 go build -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
+brew install yara-x pkg-config
+CGO_ENABLED=1 go build -tags static_link -trimpath -ldflags "-s -w -buildid=" -o argus ./cmd/argus
 ```
 
-规则扫描会直接使用 libyara 编译和执行规则，支持 hex、regex、condition、`pe`/`elf` 等 YARA 模块；遇到当前环境无法编译的规则文件会跳过并继续加载可用规则。
+规则扫描会直接使用 YARA-X 编译和执行规则，支持 hex、regex、condition、`pe`/`elf` 等 YARA 模块；遇到当前环境无法编译的规则文件会跳过并继续加载可用规则。
 
-Linux/Windows 发布包也必须链接对应目标平台的 libyara，不能再按纯 Go 程序直接 `GOOS=... go build`。`make build-linux` 和 `make build-windows` 会给出目标依赖提示，实际发布建议在对应系统或专用交叉编译镜像里构建。
+Linux/Windows 发布包也必须链接对应目标平台的 YARA-X CAPI。官方发布包会把 YARA-X 静态集成进 `argus`/`argus.exe`，用户侧不需要额外安装 YARA-X 或 `yr`。
 
 #### 2. 查看版本
 
@@ -189,9 +189,9 @@ argus scan --module memory,stack --profile deep
 | `process` / `proc` | `ProcessScan` | `config/process_rules.yaml` 行为规则 | 进程命令行、父子进程、LoLBin、反弹 Shell、凭据转储、恢复破坏等 |
 | `network` / `net` | `NetworkScan` / `ThreatIntel` | `config/network_rules.yaml` 行为规则；ThreatIntel 需显式联网/API | 网络连接、异常联网进程、恶意端口、可疑域名、连接数量异常 |
 | `file` | `FileScan` | `config/file_rules.yaml` 行为规则 | 文件权限、可疑路径、敏感文件、启动项、小文件内容特征 |
-| `malware` | `MalwareScan` | `.rule/malware_rules` 完整 libyara 规则 | 当前平台恶意软件、Hacktool、APT、勒索、后门等文件内容检测 |
-| `webshell` | `WebshellScan` | `.rule/webshell_rules` 完整 libyara 规则 + 内置熵值/关键词兜底 | Web 目录脚本和 Webshell 规则检测 |
-| `memory` / `mem` | `MemoryScan` / `StackHunter` | Windows `MemoryScan` 复用 `.rule/malware_rules` libyara；`StackHunter` 为栈/内存启发式 | 深度内存和堆栈检测 |
+| `malware` | `MalwareScan` | `.rule/malware_rules` 完整 YARA-X 规则 | 当前平台恶意软件、Hacktool、APT、勒索、后门等文件内容检测 |
+| `webshell` | `WebshellScan` | `.rule/webshell_rules` 完整 YARA-X 规则 + 内置熵值/关键词兜底 | Web 目录脚本和 Webshell 规则检测 |
+| `memory` / `mem` | `MemoryScan` / `StackHunter` | Windows `MemoryScan` 复用 `.rule/malware_rules` YARA-X；`StackHunter` 为栈/内存启发式 | 深度内存和堆栈检测 |
 | `account` / `user` | 账户插件 | 平台 API、`/etc/passwd`、用户/组配置启发式 | Windows/Linux 账户安全检查 |
 | `persist` | 持久化插件 | 内置 `persistence_rules.yaml` 行为规则，可复制到 `config/` 覆盖 + 平台 API/文件位置 | 注册表、服务、启动项、计划任务等 |
 
@@ -448,7 +448,7 @@ rule_sources:
 本次主要更新：
 
 - 命令简化：新增 `argus all`、`argus scan all`、`--module all` 和 `argus modules`。
-- 规则体系：默认使用同级 `.rule/`，支持 `rules status/update/verify/list`，主线接入完整 libyara。
+- 规则体系：默认使用同级 `.rule/`，支持 `rules status/update/verify/list`，主线接入完整 YARA-X。
 - 行为规则：补强 `process_rules.yaml`、`network_rules.yaml`、`file_rules.yaml`，覆盖 LoLBin、挖矿、代理隧道、持久化、Webshell 行为等。
 - 报告输出：JSON/HTML 增加扫描会话、规则来源、跳过模块、中文网络策略和 DOT 攻击图谱。
 - 发布工程：构建默认使用 `-trimpath`、空 build id 和版本注入，新增 GitHub Actions 发布构建工作流。

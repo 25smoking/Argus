@@ -95,7 +95,7 @@ func LoadScanner(rulesDir, group string) (Scanner, string, error) {
 	if _, err := os.Stat(externalDir); err == nil {
 		scanner, err := loadNativeScannerFromDir(externalDir, group)
 		if err != nil {
-			return nil, "libyara:external:" + externalDir, err
+			return nil, "yara-x:external:" + externalDir, err
 		}
 		return scanner, scanner.Engine() + ":external:" + externalDir, nil
 	}
@@ -103,7 +103,7 @@ func LoadScanner(rulesDir, group string) (Scanner, string, error) {
 	minDir := "min_rules/" + groupDir
 	scanner, err := loadNativeScannerFromFS(embedded.Content, minDir, group)
 	if err != nil {
-		return nil, "libyara:embedded:minimal/" + groupDir, err
+		return nil, "yara-x:embedded:minimal/" + groupDir, err
 	}
 	return scanner, scanner.Engine() + ":embedded:minimal/" + groupDir, nil
 }
