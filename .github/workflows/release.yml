@@ -28,10 +28,14 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   APP_NAME: argus
   RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
-  BUNDLE_RULES: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.bundle_rules }}
+  BUNDLE_RULES: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.bundle_rules == true }}
 
 jobs:
   test:
@@ -107,7 +111,9 @@ jobs:
             base-devel
             autotools
             make
+            zip
             mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-go
             mingw-w64-x86_64-pkgconf
             mingw-w64-x86_64-openssl
             mingw-w64-x86_64-jansson
@@ -220,9 +226,10 @@ jobs:
             "${pkg_dir}/argus.exe" --rules-dir "${pkg_dir}/.rule" rules verify
           fi
 
-          pkg_win="$(cygpath -w "${pkg_dir}")"
-          zip_win="$(cygpath -w "dist/${pkg}.zip")"
-          powershell.exe -NoProfile -Command "Compress-Archive -Path '${pkg_win}\\*' -DestinationPath '${zip_win}' -Force"
+          (
+            cd dist
+            zip -qr "${pkg}.zip" "${pkg}"
+          )
           sha256sum "dist/${pkg}.zip" > "dist/${pkg}.zip.sha256"
 
       - name: Upload artifact
