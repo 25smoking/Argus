@@ -124,7 +124,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential curl git musl-tools pkg-config
+          sudo apt-get install -y build-essential curl git pkg-config
 
       - name: Set up Rust on Unix
         if: runner.os != 'Windows'
@@ -140,11 +140,10 @@ jobs:
         run: |
           set -euo pipefail
           capi_dir="$RUNNER_TEMP/yara-x-capi"
-          rustup target add x86_64-unknown-linux-musl
           git clone --depth 1 --branch "$YARA_X_VERSION" https://github.com/VirusTotal/yara-x.git "$RUNNER_TEMP/yara-x"
-          cargo build --release --package yara-x-capi --target x86_64-unknown-linux-musl --manifest-path "$RUNNER_TEMP/yara-x/Cargo.toml"
+          cargo build --release --package yara-x-capi --manifest-path "$RUNNER_TEMP/yara-x/Cargo.toml"
           mkdir -p "$capi_dir/include" "$capi_dir/lib/pkgconfig"
-          cp "$RUNNER_TEMP/yara-x/target/x86_64-unknown-linux-musl/release/libyara_x_capi.a" "$capi_dir/lib/"
+          cp "$RUNNER_TEMP/yara-x/target/release/libyara_x_capi.a" "$capi_dir/lib/"
           cp "$RUNNER_TEMP/yara-x/capi/include/yara_x.h" "$capi_dir/include/"
           cat > "$capi_dir/lib/pkgconfig/yara_x_capi.pc" <<EOF
           prefix=$capi_dir
@@ -154,7 +153,7 @@ jobs:
           Name: yara_x_capi
           Description: YARA-X C API static package
           Version: 1.16.0
-          Libs: \${libdir}/libyara_x_capi.a -ldl -lpthread -lm -lc
+          Libs: \${libdir}/libyara_x_capi.a -ldl -lpthread -lm
           Cflags: -I\${includedir}
           EOF
           echo "PKG_CONFIG_PATH=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
@@ -216,17 +215,25 @@ jobs:
           mkdir -p "$pkg_dir"
 
           if [[ "${{ matrix.target }}" == "linux-amd64" ]]; then
-            CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=musl-gcc \
+            CGO_ENABLED=1 GOOS=linux GOARCH=amd64 \
               go build -a -tags static_link -trimpath \
-                -ldflags "-s -w -buildid= -linkmode external -extldflags '-static' -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
+                -ldflags "-s -w -buildid= -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
                 -o "$pkg_dir/argus" ./cmd/argus
-            file "$pkg_dir/argus"
+            ldd "$pkg_dir/argus" || true
+            if ldd "$pkg_dir/argus" 2>/dev/null | grep -Eiq 'yara|yara_x|libyara'; then
+              echo "unexpected YARA dynamic dependency" >&2
+              exit 1
+            fi
           else
             CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 \
               go build -a -tags static_link -trimpath \
                 -ldflags "-s -w -buildid= -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
                 -o "$pkg_dir/argus" ./cmd/argus
             otool -L "$pkg_dir/argus"
+            if otool -L "$pkg_dir/argus" | grep -Eiq 'yara|yara_x|libyara'; then
+              echo "unexpected YARA dynamic dependency" >&2
+              exit 1
+            fi
           fi
 
           chmod +x "$pkg_dir/argus"
