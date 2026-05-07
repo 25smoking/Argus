@@ -1,0 +1,36 @@
+rule_sources:
+  - name: neo23x0-signature-base-yara-full
+    source: Neo23x0/signature-base
+    url: https://api.github.com/repos/Neo23x0/signature-base/contents/yara?ref=master
+    destination: malware_rules/neo23x0-full
+    license: Detection Rule License (DRL) 1.1
+    group: malware
+    enabled: true
+    allow_paths:
+      - "*.yar"
+      - "*.yara"
+  - name: elastic-protections-yara-full
+    source: elastic/protections-artifacts
+    url: https://api.github.com/repos/elastic/protections-artifacts/contents/yara/rules?ref=main
+    destination: malware_rules/elastic-full
+    license: Elastic License v2
+    group: malware
+    enabled: true
+    allow_paths:
+      - "*.yar"
+      - "*.yara"
+  - name: neo23x0-webshell-focused
+    source: Neo23x0/signature-base
+    url: https://api.github.com/repos/Neo23x0/signature-base/contents/yara?ref=master
+    destination: webshell_rules/neo23x0
+    license: Detection Rule License (DRL) 1.1
+    group: webshell
+    enabled: true
+    allow_paths:
+      - thor-webshells.yar
+      - apt_laudanum_webshells.yar
+      - apt_webshell_chinachopper.yar
+      - cn_pentestset_webshells.yar
+      - gen_cn_webshells.yar
+      - gen_webshell*.yar
+      - webshell_*.yar

@@ -1,0 +1,470 @@
+version: "3.2"
+description: "Argus process behavior rules - Sigma/MITRE/LOLBAS/GTFOBins/IR tuned"
+
+reverse_shells:
+  - pattern: '/dev/tcp/'
+    level: critical
+    description: "命令行包含 /dev/tcp 反弹 Shell 特征"
+    references: ["https://gtfobins.org/"]
+  - pattern: 'bash\s+-i'
+    level: critical
+    description: "Bash 交互式反弹 Shell"
+    references: ["https://gtfobins.org/"]
+  - pattern: 'sh\s+-i'
+    level: high
+    description: "Shell 交互式反弹连接"
+  - pattern: 'nc\s+.*\s-e\s'
+    level: critical
+    description: "Netcat -e 反弹 Shell"
+    references: ["https://gtfobins.org/"]
+  - pattern: 'ncat\s+.*\s-e\s'
+    level: critical
+    description: "Ncat -e 反弹 Shell"
+  - pattern: 'socat\s+.*exec:'
+    level: high
+    description: "Socat exec 反弹 Shell"
+    references: ["https://gtfobins.org/"]
+  - pattern: 'mkfifo\s+.*(/bin/)?(sh|bash)'
+    level: critical
+    description: "mkfifo 管道型反弹 Shell"
+  - pattern: 'python(3)?\s+-c'
+    level: medium
+    description: "Python 单行命令执行，需结合网络和父进程复核"
+  - pattern: 'perl\s+-e'
+    level: medium
+    description: "Perl 单行命令执行，需结合网络和父进程复核"
+  - pattern: 'php\s+-r'
+    level: medium
+    description: "PHP 单行命令执行，需结合 Web 进程复核"
+  - pattern: 'ruby\s+-rsocket|-e.*TCPSocket'
+    level: medium
+    description: "Ruby Socket 单行命令执行"
+  - pattern: 'lua\s+-e'
+    level: medium
+    description: "Lua 单行命令执行"
+  - pattern: 'openssl\s+s_client.*-connect'
+    level: medium
+    description: "OpenSSL 加密回连 Shell 常见组件"
+  - pattern: 'osascript\s+-e'
+    level: medium
+    description: "macOS AppleScript 命令执行"
+
+malicious_powershell:
+  - pattern: '(-enc|-encodedcommand)'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell EncodedCommand"
+    references: ["https://attack.mitre.org/techniques/T1059/001/"]
+  - pattern: 'frombase64string'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell Base64 解码执行"
+  - pattern: 'downloadstring|downloadfile'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell 远程下载执行"
+  - pattern: '\biex\b|invoke-expression'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell Invoke-Expression"
+  - pattern: 'bypass|executionpolicy'
+    keywords: ["powershell", "pwsh"]
+    level: medium
+    description: "PowerShell 执行策略绕过"
+  - pattern: 'hidden|windowstyle'
+    keywords: ["powershell", "pwsh"]
+    level: medium
+    description: "PowerShell 隐藏窗口执行"
+  - pattern: 'amsi|amsiutils|scancontent'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell AMSI 规避痕迹"
+  - pattern: 'set-mppreference|add-mppreference'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell 修改 Defender 配置"
+  - pattern: 'reflection\.assembly|loadwithpartialname|virtualprotect'
+    keywords: ["powershell", "pwsh"]
+    level: high
+    description: "PowerShell 反射加载或内存执行痕迹"
+
+command_patterns:
+  - name: powershell_download_execute
+    process: '(?i)^(powershell|powershell\.exe|pwsh|pwsh\.exe)$'
+    pattern: '(?i)(downloadstring|downloadfile|invoke-webrequest|iwr|curl|wget).*(iex|invoke-expression|start-process|\|)'
+    level: high
+    description: "PowerShell 下载并执行模式"
+    mitre: ["T1059.001", "T1105"]
+    references: ["https://attack.mitre.org/techniques/T1059/001/"]
+  - name: powershell_encoded_command
+    process: '(?i)^(powershell|powershell\.exe|pwsh|pwsh\.exe)$'
+    pattern: '(?i)(-enc|-encodedcommand)\s+[a-z0-9+/=]{20,}'
+    level: high
+    description: "PowerShell EncodedCommand 长参数"
+    mitre: ["T1059.001", "T1027"]
+  - name: powershell_defense_evasion
+    process: '(?i)^(powershell|powershell\.exe|pwsh|pwsh\.exe)$'
+    pattern: '(?i)(executionpolicy\s+bypass|windowstyle\s+hidden|nop\b|noninteractive|amsi|bypass|set-mppreference.*disable|add-mppreference.*exclusion)'
+    level: high
+    description: "PowerShell 执行策略绕过、隐藏执行或关闭防护"
+    mitre: ["T1059.001", "T1562.001"]
+  - name: powershell_obfuscation_tokens
+    process: '(?i)^(powershell|powershell\.exe|pwsh|pwsh\.exe)$'
+    pattern: '(?i)(\^|\+\s*''|`|\$\{?env:|join\s*\(|replace\s*\(|char\]|0x[0-9a-f]{2})'
+    level: medium
+    description: "PowerShell 命令行疑似混淆拼接"
+    mitre: ["T1027", "T1059.001"]
+  - name: certutil_download_or_decode
+    process: '(?i)^certutil\.exe$'
+    pattern: '(?i)(-urlcache|-split|-f\s+https?://|-decode|-decodehex|-encode)'
+    level: high
+    description: "Certutil 下载、编码或解码行为"
+    mitre: ["T1105", "T1027"]
+    references: ["https://lolbas-project.github.io/"]
+  - name: bitsadmin_download_execute
+    process: '(?i)^bitsadmin\.exe$'
+    pattern: '(?i)(/transfer|/addfile|/setnotifycmdline|/resume|https?://)'
+    level: high
+    description: "Bitsadmin 文件下载或设置执行回调"
+    mitre: ["T1105", "T1197"]
+    references: ["https://lolbas-project.github.io/"]
+  - name: regsvr32_remote_scriptlet
+    process: '(?i)^regsvr32\.exe$'
+    pattern: '(?i)(/i:.*https?://|scrobj\.dll|\.sct)'
+    level: critical
+    description: "Regsvr32 远程脚本组件执行"
+    mitre: ["T1218.010"]
+    references: ["https://lolbas-project.github.io/"]
+  - name: rundll32_script_or_lsass_dump
+    process: '(?i)^rundll32\.exe$'
+    pattern: '(?i)(javascript:|vbscript:|url\.dll|comsvcs\.dll.*minidump|shell32\.dll)'
+    level: high
+    description: "Rundll32 脚本执行或 LSASS Dump 行为"
+    mitre: ["T1218.011", "T1003.001"]
+    references: ["https://attack.mitre.org/techniques/T1003/001/"]
+  - name: mshta_remote_or_inline_script
+    process: '(?i)^mshta\.exe$'
+    pattern: '(?i)(https?://|javascript:|vbscript:|\.hta|createobject)'
+    level: critical
+    description: "MSHTA 远程或内联脚本执行"
+    mitre: ["T1218.005"]
+    references: ["https://lolbas-project.github.io/"]
+  - name: wscript_cscript_remote_or_encoded
+    process: '(?i)^(wscript|wscript\.exe|cscript|cscript\.exe)$'
+    pattern: '(?i)(https?://|\.vbs|\.js|\.jse|\.wsf|frombase64string|powershell|cmd\.exe)'
+    level: high
+    description: "Windows Script Host 远程脚本、编码脚本或拉起 Shell"
+    mitre: ["T1059.005"]
+  - name: msiexec_remote_package
+    process: '(?i)^msiexec\.exe$'
+    pattern: '(?i)(/i\s+https?://|http[s]?://.*\.msi|/quiet|/qn)'
+    level: high
+    description: "Msiexec 远程 MSI 安装或静默执行"
+    mitre: ["T1218.007", "T1105"]
+  - name: installutil_execute
+    process: '(?i)^installutil\.exe$'
+    pattern: '(?i)(/logfile=|/logtoconsole=false|/u\s+|\.dll|\.exe)'
+    level: high
+    description: "InstallUtil 代理执行 .NET 程序"
+    mitre: ["T1218.004"]
+  - name: msbuild_inline_task
+    process: '(?i)^msbuild\.exe$'
+    pattern: '(?i)(\.xml|\.csproj|inline task|usingtask|taskfactory|code task)'
+    level: high
+    description: "MSBuild 内联任务或工程文件代理执行"
+    mitre: ["T1127.001"]
+  - name: hh_chm_execution
+    process: '(?i)^hh\.exe$'
+    pattern: '(?i)(\.chm|mk:@msitstore|javascript:|vbscript:)'
+    level: high
+    description: "HTML Help/CHM 脚本执行"
+    mitre: ["T1218"]
+  - name: forfiles_suspicious_cmd
+    process: '(?i)^forfiles\.exe$'
+    pattern: '(?i)(/c\s+.*(cmd|powershell|mshta|rundll32|regsvr32))'
+    level: medium
+    description: "Forfiles 代理执行脚本或 LOLBin"
+    mitre: ["T1202"]
+  - name: wmic_remote_process
+    process: '(?i)^wmic\.exe$'
+    pattern: '(?i)(process\s+call\s+create|/node:|shadowcopy\s+delete)'
+    level: high
+    description: "WMIC 远程进程创建或卷影副本删除"
+    mitre: ["T1047", "T1490"]
+  - name: schtasks_persistence_or_remote
+    process: '(?i)^schtasks\.exe$'
+    pattern: '(?i)(/create|/change|/run).*(/sc\s+(minute|onlogon|onstart)|powershell|cmd|mshta|rundll32|regsvr32|/s\s+)'
+    level: high
+    description: "计划任务持久化、远程任务或执行高风险解释器"
+    mitre: ["T1053.005"]
+  - name: sc_create_suspicious_service
+    process: '(?i)^sc\.exe$'
+    pattern: '(?i)(create|config)\s+.*binpath=.*(cmd|powershell|mshta|rundll32|regsvr32|/c\s|https?://|\\\\users\\\\public|\\\\programdata|\\\\temp)'
+    level: high
+    description: "创建或修改服务指向可疑命令/落点"
+    mitre: ["T1543.003"]
+  - name: netsh_portproxy_or_firewall_tamper
+    process: '(?i)^netsh\.exe$'
+    pattern: '(?i)(interface\s+portproxy|advfirewall\s+set\s+.*state\s+off|firewall\s+set\s+opmode\s+disable)'
+    level: high
+    description: "Netsh 端口转发或关闭防火墙"
+    mitre: ["T1090", "T1562.004"]
+  - name: lsass_dump_tools
+    process: '(?i)^(procdump|procdump64|procdump\.exe|procdump64\.exe|taskmgr\.exe|rundll32\.exe)$'
+    pattern: '(?i)(lsass|comsvcs\.dll.*minidump|-ma\s+.*lsass|/dump)'
+    level: critical
+    description: "疑似 LSASS 凭据转储"
+    mitre: ["T1003.001"]
+    references: ["https://attack.mitre.org/techniques/T1003/001/"]
+  - name: registry_hive_dump
+    process: '(?i)^(reg|reg\.exe)$'
+    pattern: '(?i)(save\s+hklm\\(sam|system|security)|export\s+hklm\\(sam|system|security))'
+    level: critical
+    description: "导出 SAM/SYSTEM/SECURITY 注册表配置单元"
+    mitre: ["T1003.002"]
+  - name: add_user_or_admin_group
+    process: '(?i)^(net|net\.exe|net1|net1\.exe)$'
+    pattern: '(?i)(user\s+\S+\s+\S+\s+/add|localgroup\s+(administrators|remote desktop users|管理员)\s+\S+\s+/add)'
+    level: high
+    description: "新增用户或加入管理员/远程桌面组"
+    mitre: ["T1136.001", "T1098"]
+  - name: rdp_enable_registry
+    process: '(?i)^(reg|reg\.exe|powershell|powershell\.exe|netsh|netsh\.exe)$'
+    pattern: '(?i)(fdenytsconnections\s+/d\s+0|terminal server|remote desktop|remote desktop users|3389)'
+    level: medium
+    description: "启用远程桌面或放通 RDP 痕迹"
+    mitre: ["T1021.001"]
+  - name: shadow_copy_delete
+    process: '(?i)^(vssadmin|vssadmin\.exe|wmic|wmic\.exe|powershell|powershell\.exe|pwsh|pwsh\.exe)$'
+    pattern: '(?i)(delete\s+shadows|resize\s+shadowstorage|shadowcopy\s+delete|delete\s+systemstatebackup)'
+    level: critical
+    description: "删除或破坏系统恢复能力"
+    mitre: ["T1490"]
+    references: ["https://attack.mitre.org/techniques/T1490/"]
+  - name: boot_recovery_disable
+    process: '(?i)^(bcdedit|bcdedit\.exe)$'
+    pattern: '(?i)(recoveryenabled\s+no|bootstatuspolicy\s+ignoreallfailures|safeboot)'
+    level: high
+    description: "修改启动恢复策略"
+    mitre: ["T1490"]
+  - name: defender_tamper_command
+    process: '(?i)^(powershell|powershell\.exe|pwsh|pwsh\.exe|sc|sc\.exe|reg|reg\.exe)$'
+    pattern: '(?i)(set-mppreference.*disable|disableantispyware|windefend|securityhealthservice|realtimeprotection|tamperprotection)'
+    level: high
+    description: "疑似关闭或篡改 Windows Defender/安全服务"
+    mitre: ["T1562.001"]
+  - name: linux_reverse_shell_interpreter
+    process: '(?i)^(bash|sh|zsh|dash|python|python3|perl|php|ruby|node|lua|nc|ncat|socat|openssl)$'
+    pattern: '(?i)(/dev/tcp/|bash\s+-i|sh\s+-i|nc\s+.*-e|ncat\s+.*-e|socat\s+.*exec:|fsockopen|pty\.spawn|socket\.|child_process|mkfifo|s_client.*-connect)'
+    level: critical
+    description: "Linux/macOS 解释器反弹 Shell 或交互式 Shell 特征"
+    mitre: ["T1059", "T1105"]
+    references: ["https://gtfobins.org/"]
+  - name: linux_download_execute
+    process: '(?i)^(bash|sh|zsh|dash|curl|wget|python|python3|perl|php|ruby|node)$'
+    pattern: '(?i)((curl|wget).*(\|\s*(sh|bash|zsh)|-o\s+(/tmp|/var/tmp|/dev/shm|/run/shm))|chmod\s+\+x\s+(/tmp|/var/tmp|/dev/shm|/run/shm)|(/tmp|/var/tmp|/dev/shm)/.*;\s*(sh|bash|zsh))'
+    level: high
+    description: "下载到可疑落点并执行"
+    mitre: ["T1105", "T1059"]
+  - name: linux_cron_download_pipe
+    process: '(?i)^(bash|sh|zsh|dash|crontab|curl|wget)$'
+    pattern: '(?i)(crontab|/etc/cron|/var/spool/cron).*(curl|wget|/dev/tcp|bash|sh|python|xmrig|kinsing|kdevtmpfsi)'
+    level: high
+    description: "计划任务写入下载执行、反弹 Shell 或挖矿命令"
+    mitre: ["T1053.003", "T1105"]
+    references: ["https://cloud.tencent.com/developer/article/1744547", "https://redcanary.com/threat-detection-report/trends/linux-coinminers/"]
+  - name: linux_systemd_persistence
+    process: '(?i)^(systemctl|bash|sh|zsh|tee|cp|mv)$'
+    pattern: '(?i)(systemctl\s+(enable|start|link)|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system).*(curl|wget|bash|sh|python|xmrig|kinsing|kdevtmpfsi|frpc|nps|chisel|gost|bot\.service)'
+    level: high
+    description: "systemd 服务持久化指向下载器、矿工或代理工具"
+    mitre: ["T1543.002"]
+    references: ["https://sandflysecurity.com/blog/log4j-kinsing-linux-malware-in-the-wild"]
+  - name: linux_ssh_authorized_keys_write
+    process: '(?i)^(bash|sh|zsh|dash|tee|echo|cat|sed|python|python3)$'
+    pattern: '(?i)(authorized_keys|\.ssh).*(ssh-rsa|ssh-ed25519|curl|wget|echo|tee|>>)'
+    level: high
+    description: "写入 SSH authorized_keys 持久化"
+    mitre: ["T1098.004"]
+    references: ["https://redcanary.com/threat-detection-report/trends/linux-coinminers/"]
+  - name: linux_ld_preload_rootkit
+    process: '(?i)^(bash|sh|zsh|dash|tee|echo|sed|cp|mv)$'
+    pattern: '(?i)(/etc/ld\.so\.preload|ld_preload|/etc/libsystem\.so|libsystem\.so)'
+    level: critical
+    description: "疑似 LD_PRELOAD Rootkit 写入或修改"
+    mitre: ["T1574.006", "T1014"]
+    references: ["https://cloud.tencent.com/developer/article/1744547", "https://sandflysecurity.com/blog/log4j-kinsing-linux-malware-in-the-wild"]
+  - name: linux_miner_process_flags
+    process: '(?i)^(xmrig|kdevtmpfsi|kinsing|minerd|xmr-stak|kswapd0|kswapd00|kthreaddk|watchdogs)$'
+    pattern: '(?i)(stratum|pool|monero|xmr|donate-level|algo|coin|wallet|nicehash|supportxmr|hashvault|c3pool|nanopool)'
+    level: critical
+    description: "挖矿进程或伪装系统进程携带矿池/钱包参数"
+    mitre: ["T1496"]
+  - name: linux_miner_defense_evasion
+    process: '(?i)^(bash|sh|zsh|dash|pkill|killall|systemctl|service|iptables|ufw|curl|wget)$'
+    pattern: '(?i)(aegis|aliyun|qcloud|ydservice|barad_agent|cloudmonitor|iptables\s+-f|ufw\s+disable|systemctl\s+stop\s+(firewalld|iptables)|pkill\s+.*(xmrig|minerd|kinsing)|killall\s+.*(xmrig|minerd|kinsing))'
+    level: high
+    description: "挖矿木马常见关闭安全组件、竞争矿工或防火墙行为"
+    mitre: ["T1562.001", "T1562.004", "T1496"]
+  - name: linux_log_history_cleanup
+    process: '(?i)^(bash|sh|zsh|dash|rm|truncate|cat|echo|history|journalctl)$'
+    pattern: '(?i)(history\s+-c|unset\s+histfile|/var/log/(secure|auth\.log|messages|wtmp|btmp|lastlog)|journalctl\s+--vacuum|truncate\s+-s\s+0\s+/var/log|>\s*/var/log)'
+    level: high
+    description: "清理命令历史或系统日志"
+    mitre: ["T1070"]
+  - name: linux_chattr_immutable_evasion
+    process: '(?i)^chattr$'
+    pattern: '(?i)(\+ia|\+i|\-ia|\-i).*(kinsing|kdevtmpfsi|xmrig|/etc/ld\.so\.preload|/tmp|/var/tmp|/dev/shm)'
+    level: high
+    description: "通过 chattr 锁定/解锁恶意文件或关键痕迹"
+    mitre: ["T1222.002", "T1564"]
+  - name: linux_redis_unauthorized_persistence
+    process: '(?i)^(redis-cli|bash|sh|zsh|dash)$'
+    pattern: '(?i)(config\s+set\s+dir\s+(/var/spool/cron|/root/\.ssh|/etc/cron)|config\s+set\s+dbfilename\s+(authorized_keys|root|.*cron)|flushall.*set.*ssh-rsa)'
+    level: critical
+    description: "Redis 未授权写 cron 或 SSH key 的常见入侵链"
+    mitre: ["T1098.004", "T1053.003"]
+  - name: linux_recon_scan_tools
+    process: '(?i)^(fscan|kscan|nmap|masscan|zmap|goby|ladon|naabu|nuclei|afrog|ehole)$'
+    pattern: '(?i)(-h\s|--host|-p\s|--ports|-rate|--rate|-u\s|--url|--poc|--script|icmp|smb|ssh|redis|weblogic|tomcat)'
+    level: high
+    description: "发现常见内网探测、资产识别或漏洞扫描工具执行"
+    mitre: ["T1046", "T1595"]
+  - name: proxy_tunnel_tools
+    process: '(?i)^(frpc|frps|nps|npc|chisel|gost|ew|iox|ngrok|cloudflared|ssh|plink|stowaway|ligolo|venom)$'
+    pattern: '(?i)(server_addr|remote_port|socks|socks5|reverse|client|listen|connect|proxy|tunnel|visitor|stcp|xtcp|--to|--reverse|-r\s)'
+    level: high
+    description: "代理隧道、端口转发或内网穿透工具执行"
+    mitre: ["T1090", "T1572"]
+    references: ["https://help.fortinet.com/fsiem/Public_Resource_Access/7_1_0/rules/PH_RULE_PUA_Fast_Reverse_Proxy_FRP_Execution.htm"]
+  - name: macos_lolbin_script_execution
+    process: '(?i)^(osascript|curl|bash|sh|zsh|python|python3)$'
+    pattern: '(?i)(osascript\s+-e|do shell script|curl.*\|\s*(sh|bash|zsh)|launchctl\s+(load|bootstrap)|/library/launchagents|/library/launchdaemons)'
+    level: high
+    description: "macOS AppleScript、下载执行或 LaunchAgent/Daemon 持久化行为"
+    mitre: ["T1059.002", "T1543.001"]
+  - name: macos_quarantine_or_gatekeeper_bypass
+    process: '(?i)^(xattr|spctl|bash|sh|zsh)$'
+    pattern: '(?i)(xattr\s+-d\s+com\.apple\.quarantine|spctl\s+--master-disable)'
+    level: high
+    description: "macOS 隔离属性或 Gatekeeper 规避"
+    mitre: ["T1553.001"]
+
+office_spawned_shells:
+  parent_processes:
+    - winword.exe
+    - excel.exe
+    - powerpnt.exe
+    - outlook.exe
+    - onenote.exe
+    - mspub.exe
+    - visio.exe
+    - wps.exe
+    - et.exe
+    - wpp.exe
+  child_processes:
+    - process: cmd.exe
+      level: critical
+      description: "Office/WPS 拉起 cmd，疑似宏或钓鱼文档执行"
+    - process: powershell.exe
+      level: critical
+      description: "Office/WPS 拉起 PowerShell，疑似宏或无文件攻击"
+    - process: pwsh.exe
+      level: critical
+      description: "Office/WPS 拉起 PowerShell Core"
+    - process: wscript.exe
+      level: high
+      description: "Office/WPS 拉起 WScript"
+    - process: cscript.exe
+      level: high
+      description: "Office/WPS 拉起 CScript"
+    - process: mshta.exe
+      level: critical
+      description: "Office/WPS 拉起 MSHTA"
+    - process: rundll32.exe
+      level: high
+      description: "Office/WPS 拉起 Rundll32"
+    - process: regsvr32.exe
+      level: high
+      description: "Office/WPS 拉起 Regsvr32"
+    - process: certutil.exe
+      level: high
+      description: "Office/WPS 拉起 Certutil"
+    - process: bitsadmin.exe
+      level: high
+      description: "Office/WPS 拉起 Bitsadmin"
+    - process: schtasks.exe
+      level: high
+      description: "Office/WPS 拉起计划任务"
+
+parent_child_patterns:
+  - parent: '(?i)^(w3wp\.exe|httpd|httpd\.exe|nginx|nginx\.exe|apache2|tomcat|java|php-fpm|php-cgi|uwsgi|gunicorn)$'
+    child: '(?i)^(cmd\.exe|powershell\.exe|pwsh\.exe|bash|sh|zsh|python|python3|perl|php|nc|ncat|curl|wget|whoami|id|net\.exe|ipconfig\.exe|ifconfig)$'
+    level: critical
+    description: "Web 服务进程拉起 Shell、解释器或侦察工具"
+    mitre: ["T1505.003", "T1059"]
+    references: ["https://www.blumira.com/blog/how-to-detect-web-shells"]
+  - parent: '(?i)^(w3wp\.exe|httpd|nginx|apache2|tomcat|java|php-fpm|php-cgi)$'
+    child: '(?i)^(fscan|kscan|nmap|masscan|zmap|frpc|frps|nps|npc|chisel|gost|ew|iox|ngrok)$'
+    level: critical
+    description: "Web 服务进程拉起扫描器或代理隧道工具"
+    mitre: ["T1505.003", "T1046", "T1090"]
+  - parent: '(?i)^(redis-server|mysqld|postgres|postgresql|sqlservr\.exe|oracle|mongod)$'
+    child: '(?i)^(cmd\.exe|powershell\.exe|bash|sh|zsh|curl|wget|nc|ncat|python|python3)$'
+    level: high
+    description: "数据库服务进程拉起 Shell、下载器或解释器"
+    mitre: ["T1059", "T1105"]
+  - parent: '(?i)^(explorer\.exe|finder)$'
+    child: '(?i)^(powershell\.exe|cmd\.exe|mshta\.exe|regsvr32\.exe|rundll32\.exe|certutil\.exe|bitsadmin\.exe|osascript|bash|sh|zsh)$'
+    level: medium
+    description: "用户图形会话拉起高风险脚本或 LOLBin"
+    mitre: ["T1059", "T1218"]
+  - parent: '(?i)^(outlook\.exe|thunderbird|mail|foxmail\.exe)$'
+    child: '(?i)^(cmd\.exe|powershell\.exe|wscript\.exe|cscript\.exe|mshta\.exe|rundll32\.exe|regsvr32\.exe|bash|sh|osascript)$'
+    level: high
+    description: "邮件客户端拉起脚本解释器或 Shell"
+    mitre: ["T1204", "T1059"]
+  - parent: '(?i)^(cron|crond|launchd|systemd)$'
+    child: '(?i)^(curl|wget|bash|sh|zsh|python|python3|perl|php|nc|ncat|socat|xmrig|kinsing|kdevtmpfsi|frpc|nps|npc|chisel|gost)$'
+    level: high
+    description: "计划任务或服务管理器拉起下载器、解释器、矿工或隧道工具"
+    mitre: ["T1053", "T1059", "T1543", "T1496"]
+  - parent: '(?i)^(services\.exe|svchost\.exe|wmiprvse\.exe|spoolsv\.exe)$'
+    child: '(?i)^(cmd\.exe|powershell\.exe|mshta\.exe|rundll32\.exe|regsvr32\.exe|certutil\.exe|bitsadmin\.exe|wscript\.exe|cscript\.exe)$'
+    level: high
+    description: "Windows 服务/WMI/打印服务拉起高风险脚本或 LOLBin"
+    mitre: ["T1047", "T1059", "T1218"]
+
+suspicious_system_processes:
+  - name: lsass.exe
+    required_path: "c:\\windows\\system32"
+    level: critical
+    description: "疑似伪装 lsass.exe"
+  - name: svchost.exe
+    required_path: "c:\\windows\\system32"
+    level: high
+    description: "疑似伪装 svchost.exe"
+  - name: winlogon.exe
+    required_path: "c:\\windows\\system32"
+    level: high
+    description: "疑似伪装 winlogon.exe"
+  - name: csrss.exe
+    required_path: "c:\\windows\\system32"
+    level: high
+    description: "疑似伪装 csrss.exe"
+  - name: spoolsv.exe
+    required_path: "c:\\windows\\system32"
+    level: medium
+    description: "疑似伪装 spoolsv.exe"
+  - name: explorer.exe
+    required_path: "c:\\windows"
+    level: medium
+    description: "疑似伪装 explorer.exe"
+  - name: sshd
+    required_path: "/usr/sbin"
+    level: medium
+    description: "sshd 运行路径异常"
+  - name: systemd
+    required_path: "/usr/lib/systemd"
+    level: medium
+    description: "systemd 运行路径异常"

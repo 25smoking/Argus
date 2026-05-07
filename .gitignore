@@ -1,0 +1,26 @@
+.DS_Store
+
+# Local build outputs
+/argus
+/argus.exe
+/argus-linux
+/argus-windows.exe
+/opt/
+/dist/
+/build/
+
+# Runtime outputs
+/reports/
+/attack_graph*.dot
+/*.jsonl
+
+# External rule bundles
+/.rule/
+/rules/
+/rules.lock.json
+
+# Local/editor state
+.idea/
+.vscode/
+*.swp
+*.tmp

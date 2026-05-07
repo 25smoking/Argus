@@ -1,0 +1,356 @@
+version: "2.2"
+description: "Argus network behavior rules - IR tuned"
+author: "Argus Security Team"
+last_updated: "2026-05-08"
+
+# 异常进程网络行为：偏行为检测，不等同于威胁情报命中。
+unexpected_network_processes:
+  - process: "notepad.exe"
+    description: "Notepad connecting to network (Injection Indicator)"
+    level: critical
+  - process: "calc.exe"
+    description: "Calculator connecting to network"
+    level: critical
+  - process: "mspaint.exe"
+    description: "Paint connecting to network"
+    level: critical
+  - process: "lsass.exe"
+    description: "LSASS connecting to internet (Potential Credential Exfiltration)"
+    allow_local_subnet: true
+    level: high
+  - process: "winlogon.exe"
+    description: "Winlogon connecting to internet"
+    level: high
+  - process: "csrss.exe"
+    description: "CSRSS connecting to internet"
+    level: high
+  - process: "rundll32.exe"
+    description: "Rundll32 external network connection"
+    level: high
+  - process: "regsvr32.exe"
+    description: "Regsvr32 external network connection"
+    level: high
+  - process: "mshta.exe"
+    description: "MSHTA external network connection"
+    level: high
+  - process: "wscript.exe"
+    description: "WScript external network connection"
+    level: high
+  - process: "cscript.exe"
+    description: "CScript external network connection"
+    level: high
+  - process: "certutil.exe"
+    description: "Certutil external network connection"
+    level: high
+  - process: "bitsadmin.exe"
+    description: "Bitsadmin external network connection"
+    level: high
+  - process: "wmic.exe"
+    description: "WMIC external network connection"
+    level: medium
+  - process: "schtasks.exe"
+    description: "Scheduled task utility connecting to internet"
+    level: medium
+  - process: "powershell.exe"
+    description: "PowerShell connecting to internet"
+    level: medium
+  - process: "pwsh.exe"
+    description: "PowerShell Core connecting to internet"
+    level: medium
+  - process: "cmd.exe"
+    description: "Cmd shell connecting to internet"
+    level: medium
+  - process: "winword.exe"
+    description: "Office Word external network connection"
+    level: low
+  - process: "excel.exe"
+    description: "Office Excel external network connection"
+    level: low
+  - process: "powerpnt.exe"
+    description: "Office PowerPoint external network connection"
+    level: low
+  - process: "osascript"
+    description: "AppleScript interpreter connecting to internet"
+    level: high
+  - process: "bash"
+    description: "Shell interpreter connecting to internet"
+    level: medium
+  - process: "sh"
+    description: "Shell interpreter connecting to internet"
+    level: medium
+  - process: "zsh"
+    description: "Interactive shell connecting to internet"
+    level: medium
+  - process: "python"
+    description: "Python interpreter connecting to internet"
+    level: medium
+  - process: "python3"
+    description: "Python interpreter connecting to internet"
+    level: medium
+  - process: "perl"
+    description: "Perl interpreter connecting to internet"
+    level: medium
+  - process: "php"
+    description: "PHP interpreter connecting to internet"
+    level: medium
+  - process: "ruby"
+    description: "Ruby interpreter connecting to internet"
+    level: medium
+  - process: "node"
+    description: "Node.js interpreter connecting to internet"
+    level: medium
+  - process: "nc"
+    description: "Netcat connecting to internet"
+    level: high
+  - process: "ncat"
+    description: "Ncat connecting to internet"
+    level: high
+  - process: "socat"
+    description: "Socat connecting to internet"
+    level: high
+  - process: "xmrig"
+    description: "XMRig miner network connection"
+    level: critical
+  - process: "kdevtmpfsi"
+    description: "Kinsing/kdevtmpfsi miner network connection"
+    level: critical
+  - process: "kinsing"
+    description: "Kinsing malware network connection"
+    level: critical
+  - process: "minerd"
+    description: "Cryptominer network connection"
+    level: critical
+  - process: "xmr-stak"
+    description: "XMR miner network connection"
+    level: critical
+  - process: "frpc"
+    description: "FRP client network tunnel"
+    level: high
+  - process: "frps"
+    description: "FRP server network tunnel"
+    level: high
+  - process: "nps"
+    description: "NPS tunnel server"
+    level: high
+  - process: "npc"
+    description: "NPS tunnel client"
+    level: high
+  - process: "chisel"
+    description: "Chisel tunnel"
+    level: high
+  - process: "gost"
+    description: "GOST proxy tunnel"
+    level: high
+  - process: "ew"
+    description: "EarthWorm proxy tunnel"
+    level: high
+  - process: "iox"
+    description: "IOX proxy tunnel"
+    level: high
+  - process: "ngrok"
+    description: "Ngrok tunnel client"
+    level: high
+  - process: "cloudflared"
+    description: "Cloudflare tunnel client"
+    level: medium
+
+# 高危端口：outbound 检测外联，inbound 检测对外监听，any 两者都匹配。
+malicious_ports:
+  - port: 4444
+    protocol: "tcp"
+    direction: "any"
+    description: "Metasploit/reverse shell common listener"
+    malware_families: ["Metasploit", "reverse-shell"]
+    level: critical
+  - port: 1337
+    protocol: "tcp"
+    direction: "any"
+    description: "Common backdoor/C2 port"
+    malware_families: ["backdoor"]
+    level: high
+  - port: 31337
+    protocol: "tcp"
+    direction: "any"
+    description: "Classic backdoor port"
+    malware_families: ["Back Orifice", "backdoor"]
+    level: high
+  - port: 5555
+    protocol: "tcp"
+    direction: "any"
+    description: "ADB/common backdoor port"
+    malware_families: ["ADB", "backdoor"]
+    level: medium
+  - port: 6666
+    protocol: "tcp"
+    direction: "any"
+    description: "IRC/botnet common port"
+    malware_families: ["IRC botnet"]
+    level: medium
+  - port: 6667
+    protocol: "tcp"
+    direction: "any"
+    description: "IRC protocol / legacy botnets"
+    malware_families: ["IRC botnet"]
+    level: medium
+  - port: 7777
+    protocol: "tcp"
+    direction: "any"
+    description: "Common C2/backdoor listener port"
+    malware_families: ["backdoor"]
+    level: medium
+  - port: 9001
+    protocol: "tcp"
+    direction: "any"
+    description: "Tor relay / suspicious proxy port"
+    malware_families: ["proxy", "tor"]
+    level: medium
+  - port: 3333
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["XMRig", "coinminer"]
+    level: high
+  - port: 3334
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 3335
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 5556
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 7778
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 9999
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common Stratum/mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 14433
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common encrypted mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 14444
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Common encrypted mining pool port"
+    malware_families: ["coinminer"]
+    level: high
+  - port: 445
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Outbound SMB (worm/lateral movement)"
+    malware_families: ["worm", "lateral-movement"]
+    level: high
+  - port: 135
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Outbound RPC endpoint mapper"
+    malware_families: ["lateral-movement"]
+    level: medium
+  - port: 139
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Outbound NetBIOS/SMB"
+    malware_families: ["lateral-movement"]
+    level: medium
+  - port: 3389
+    protocol: "tcp"
+    direction: "outbound"
+    description: "Outbound RDP"
+    malware_families: ["lateral-movement", "remote-control"]
+    level: medium
+  - port: 7000
+    protocol: "tcp"
+    direction: "any"
+    description: "FRP default bind/proxy port"
+    malware_families: ["FRP", "proxy"]
+    level: medium
+  - port: 7500
+    protocol: "tcp"
+    direction: "inbound"
+    description: "FRP dashboard/default admin exposure"
+    malware_families: ["FRP", "proxy"]
+    level: medium
+  - port: 8024
+    protocol: "tcp"
+    direction: "any"
+    description: "NPS/NPC tunnel common bridge port"
+    malware_families: ["NPS", "proxy"]
+    level: medium
+  - port: 1080
+    protocol: "tcp"
+    direction: "inbound"
+    description: "SOCKS proxy listener"
+    malware_families: ["proxy"]
+    level: medium
+  - port: 2375
+    protocol: "tcp"
+    direction: "inbound"
+    description: "Docker API exposed without TLS"
+    malware_families: ["cloud-intrusion"]
+    level: high
+  - port: 6379
+    protocol: "tcp"
+    direction: "inbound"
+    description: "Redis exposed externally"
+    malware_families: ["initial-access", "persistence"]
+    level: high
+
+suspicious_domains:
+  - pattern: '(?i)\.(duckdns\.org|no-ip\.com|no-ip\.org|dynu\.net|3322\.org|f3322\.net|oray\.com)$'
+    description: "Dynamic DNS provider"
+    level: medium
+  - pattern: '(?i)\.(tk|ml|ga|cf|gq)$'
+    description: "Free TLD with high abuse rate"
+    level: medium
+  - pattern: '(?i)(ngrok\.io|ngrok-free\.app|portmap\.io|localtunnel\.me|serveo\.net|natapp\.(cn|cc)|cpolar\.(cn|com)|trycloudflare\.com|cloudflared|workers\.dev|pages\.dev|glitch\.me|replit\.dev)'
+    description: "Tunneling or temporary hosting service"
+    level: high
+  - pattern: '(?i)(pool\.minexmr\.com|supportxmr\.com|hashvault\.pro|nanopool\.org|moneroocean\.stream|c3pool\.org|nicehash\.com|xmrpool|xmr-stak|xmrig|stratum\+tcp|stratum\+ssl|pool\.[a-z0-9.-]*(xmr|monero|mine))'
+    description: "Cryptomining pool or Stratum indicator"
+    level: high
+  - pattern: '(?i)(pastebin\.com|paste\.rs|hastebin\.com|raw\.githubusercontent\.com|gist\.githubusercontent\.com|gitlab\.com/.*/-/raw/|gitee\.com/.*/raw/|transfer\.sh|file\.io|anonfiles|cdn\.discordapp\.com)'
+    description: "Common paste/raw hosting used for payload staging"
+    level: low
+  - pattern: '(?i)(discord(app)?\.com/api/webhooks|api\.telegram\.org/bot|t\.me/)'
+    description: "Common webhook or bot API used for exfiltration/control"
+    level: medium
+  - pattern: '(?i)(\.onion|tor2web|i2p)'
+    description: "Anonymous network indicator"
+    level: high
+  - pattern: '(?i)(frp|frpc|frps|nps|npc|chisel|gost|stowaway|ligolo|venom|iox|earthworm|ew_for_linux|ew_for_win)'
+    description: "Proxy/tunnel tool keyword in command line"
+    level: high
+  - pattern: '(?i)(fscan|kscan|masscan|zmap|nuclei|afrog|ehole|goby|ladon)'
+    description: "Reconnaissance/scanner tool keyword in command line"
+    level: high
+  - pattern: '(?i)(weblogic|fastjson|jndi:ldap|jndi:rmi|ldap://|rmi://)'
+    description: "Exploit staging keyword in command line or hosts"
+    level: medium
+
+connection_patterns:
+  - name: "many_external_connections"
+    description: "Single process maintains many external established connections"
+    level: medium
+    threshold: 20
+  - name: "possible_scanner_or_bot"
+    description: "Single process maintains unusually many external connections; possible scanner, proxy or bot"
+    level: high
+    threshold: 80

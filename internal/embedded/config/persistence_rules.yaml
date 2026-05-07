@@ -1,0 +1,198 @@
+version: "2.2"
+description: "Argus Advanced Persistence Detection Rules (MITRE ATT&CK Aligned)"
+author: "Argus Security Team"
+last_updated: "2025-12-14"
+
+# ==============================================================================
+# 1. 注册表启动项 (Registry AutoStart) - T1547.001
+# ==============================================================================
+registry_autostart_keys:
+  # 标准用户级启动项
+  - name: "HKCU Run Key"
+    path: "HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    severity: "medium"
+  
+  # 系统级启动项
+  - name: "HKLM Run Key"
+    path: "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
+    severity: "medium"
+  
+  # 单次启动项 (恶意软件常用于安装阶段)
+  - name: "HKLM RunOnce"
+    path: "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnce"
+    severity: "medium"
+  
+  - name: "HKLM RunOnceEx"
+    path: "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\RunOnceEx"
+    severity: "medium"
+
+  # 策略启动项 (隐蔽性较高)
+  - name: "Explorer Policies Run"
+    path: "HKLM\\Software\\Microsoft\\Windows\\CurrentVersion\\Policies\\Explorer\\Run"
+    severity: "high"
+  
+  # 登录脚本
+  - name: "User Environment Logon Script"
+    path: "HKCU\\Environment"
+    value_name: "UserInitMprLogonScript"
+    severity: "high"
+
+  # Active Setup (IE组件更新触发) - T1547.014
+  - name: "Active Setup Installed Components"
+    path: "HKLM\\SOFTWARE\\Microsoft\\Active Setup\\Installed Components"
+    check_subkeys: true
+    target_value: "StubPath"
+    severity: "high"
+
+# ==============================================================================
+# 2. 系统劫持与注入 (System Hijack & Injection) - T1546
+# ==============================================================================
+registry_hijack_rules:
+  # 映像劫持 (IFEO) - T1546.012
+  # 攻击者通过 Debugger 键值，在目标程序启动时抢先运行恶意程序
+  - name: "Image File Execution Options (Debugger)"
+    root: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Image File Execution Options"
+    check_subkeys: true
+    target_value: "Debugger"
+    severity: "critical"
+    description: "Attacker may hijack system tools (utilman.exe, sethc.exe) or AV processes"
+
+  # Silent Process Exit (静默进程退出监控) - T1546.012
+  # 比 IFEO 更隐蔽，当进程退出时触发恶意程序
+  - name: "Silent Process Exit Monitoring"
+    root: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\SilentProcessExit"
+    check_subkeys: true
+    target_value: "MonitorProcess"
+    severity: "critical"
+    description: "Advanced persistence triggering on process termination"
+
+  # AppInit_DLLs (注入到每一个加载 User32.dll 的进程) - T1546.010
+  - name: "AppInit DLLs"
+    path: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Windows"
+    value_name: "AppInit_DLLs"
+    severity: "critical"
+    description: "Legacy injection method, very suspicious if not empty"
+
+  # Netsh Helper DLLs - T1546.007
+  # 攻击者注册恶意的 Netsh 辅助 DLL，当管理员运行 netsh 时触发
+  - name: "Netsh Helper DLLs"
+    path: "HKLM\\SOFTWARE\\Microsoft\\NetSh"
+    check_subkeys: true
+    severity: "high"
+    description: "Malicious DLLs loaded by Netsh.exe"
+
+# ==============================================================================
+# 3. 关键系统组件完整性 (System Integrity & Helpers) - T1547
+# ==============================================================================
+registry_integrity_checks:
+  # Winlogon Userinit - T1547.004
+  - name: "Winlogon Userinit"
+    path: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
+    value_name: "Userinit"
+    expected_contains: "userinit.exe"
+    severity: "critical"
+    description: "Must contain 'C:\\Windows\\system32\\userinit.exe,'"
+
+  # Winlogon Shell (Explorer)
+  - name: "Winlogon Shell"
+    path: "HKLM\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon"
+    value_name: "Shell"
+    expected_exact: "explorer.exe"
+    severity: "critical"
+    description: "Malware often replaces Explorer.exe shell"
+
+  # BootExecute (Session Manager)
+  - name: "Session Manager BootExecute"
+    path: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Session Manager"
+    value_name: "BootExecute"
+    expected_exact: "autocheck autochk *"
+    severity: "high"
+
+  # LSA Security Packages (SSP) - T1547.005
+  # 攻击者在此加载 DLL 以窃取登录凭证
+  - name: "LSA Security Packages"
+    path: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa"
+    value_name: "Security Packages"
+    blacklist_pattern: "(?i)(mimikatz|wce|pwdump|tspkg)"
+    severity: "critical"
+    
+  # LSA Notification Packages
+  - name: "LSA Notification Packages"
+    path: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Lsa"
+    value_name: "Notification Packages"
+    blacklist_pattern: "(?i)(rasss)" # rasss 是常见的恶意利用名，但也需人工确认
+    severity: "high"
+
+  # Print Monitors (打印机监视器 DLL) - T1547.010
+  # 随 Spooler 服务启动加载 DLL
+  - name: "Print Monitors"
+    root: "HKLM\\SYSTEM\\CurrentControlSet\\Control\\Print\\Monitors"
+    check_subkeys: true
+    target_value: "Driver"
+    severity: "high"
+    description: "Malicious DLL loaded by Spooler service"
+
+# ==============================================================================
+# 4. 恶意服务与驱动 (Services & Drivers) - T1543.003
+# ==============================================================================
+# 这些规则配合代码中的服务枚举逻辑使用
+suspicious_service_paths:
+  - pattern: "(?i)(\\\\temp\\\\|\\\\appdata\\\\|\\\\users\\\\public\\\\|\\\\programdata\\\\)"
+    description: "Service binary located in suspicious directory"
+    severity: "high"
+    
+  - pattern: "(?i)(powershell.exe|cmd.exe|wscript.exe|cscript.exe|mshta.exe)"
+    description: "Service executing script interpreter directly"
+    severity: "critical"
+
+# ==============================================================================
+# 5. 文件系统持久化 (File System Persistence) - T1547.001
+# ==============================================================================
+file_persistence_paths:
+  - name: "Global Startup Folder"
+    path: "%ProgramData%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+    severity: "medium"
+  
+  - name: "User Startup Folder"
+    path: "%APPDATA%\\Microsoft\\Windows\\Start Menu\\Programs\\Startup"
+    severity: "medium"
+
+# ==============================================================================
+# 6. WMI 持久化 (WMI Persistence) - T1546.003
+# ==============================================================================
+wmi_subscriptions:
+  - namespace: "root\\subscription"
+    class: "__EventConsumer"
+    check_properties: ["CommandLineTemplate", "ExecutablePath"]
+    severity: "high"
+    description: "Fileless persistence using WMI Events"
+
+# ==============================================================================
+# 7. 恶意命令特征库 (Command Signatures)
+# ==============================================================================
+# 用于扫描上述所有位置中发现的命令行字符串
+suspicious_command_patterns:
+  # PowerShell 编码与隐蔽执行
+  - pattern: "(?i)powershell.*-(e|enc|encodedcommand)\\s+[a-zA-Z0-9+/=]{20,}"
+    description: "PowerShell Encoded Command"
+    severity: "critical"
+  
+  - pattern: "(?i)( -w hidden| -windowstyle hidden| -nop| -noninteractive)"
+    description: "Hidden PowerShell Execution"
+    severity: "high"
+
+  # 远程下载执行
+  - pattern: "(?i)(downloadstring|downloadfile|iwr|wget|curl|bitstransfer)"
+    description: "Remote File Download"
+    severity: "high"
+
+  # 脚本加载器 (LoLBins)
+  - pattern: "(?i)(rundll32.exe|regsvr32.exe|mshta.exe|wscript.exe|cscript.exe)"
+    description: "LoLBin Script Loader in Startup"
+    severity: "medium"
+
+  # 混淆字符 (检测命令行混淆)
+  - pattern: "(?i)(\\^|%|!|\\|\\|)"
+    description: "Command Obfuscation Characters"
+    threshold: 3
+    severity: "medium"

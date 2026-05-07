@@ -1,0 +1,293 @@
+version: "3.2"
+description: "Argus file system anomaly rules - Linux/Windows/macOS IR tuned"
+
+scan_roots:
+  darwin:
+    - /etc
+    - /tmp
+    - /var/tmp
+    - /Library/LaunchAgents
+    - /Library/LaunchDaemons
+    - /Users
+    - /usr/local/bin
+    - /opt
+  linux:
+    - /etc
+    - /tmp
+    - /var/tmp
+    - /dev/shm
+    - /run/shm
+    - /usr/local/bin
+    - /usr/local/sbin
+    - /var/spool/cron
+    - /var/www
+    - /www
+    - /srv
+    - /opt
+    - /home
+    - /root
+  windows:
+    - C:\Windows\Temp
+    - C:\Users\Public
+    - C:\ProgramData
+    - C:\Temp
+    - C:\Windows\System32\Tasks
+    - C:\inetpub\wwwroot
+  default:
+    - /etc
+    - /tmp
+    - /var/tmp
+
+exclude_dirs:
+  - /proc
+  - /sys
+  - /dev
+  - /run
+  - /Volumes
+  - /System
+  - /private/var/folders
+  - node_modules
+  - .git
+  - .cache
+  - .cache/go-build
+  - .cargo/registry
+  - .rustup
+  - .npm
+  - .pnpm-store
+  - .m2/repository
+  - .gradle
+  - .gradle/caches
+  - venv
+  - .venv
+  - .antigravity/extensions
+  - .vscode/extensions
+  - .cursor/extensions
+  - .claude/plugins
+  - .codex/.tmp
+  - .BurpSuite
+  - .config/TscanPlus
+  - .gemini/antigravity
+  - Library/Caches
+
+max_files: 50000
+large_file_mb: 100
+recent_days: 7
+small_file_content_max_kb: 384
+
+temp_script_extensions:
+  - .sh
+  - .bash
+  - .zsh
+  - .py
+  - .pl
+  - .php
+  - .phtml
+  - .jsp
+  - .jspx
+  - .asp
+  - .aspx
+  - .ashx
+  - .cer
+  - .asa
+  - .js
+  - .jse
+  - .vbs
+  - .wsf
+  - .rb
+  - .lua
+  - .command
+  - .ps1
+  - .bat
+  - .cmd
+
+executable_extensions:
+  - .exe
+  - .dll
+  - .scr
+  - .com
+  - .bat
+  - .cmd
+  - .ps1
+  - .vbs
+  - .jse
+  - .wsf
+  - .js
+  - .jar
+  - .dylib
+  - .so
+  - .out
+  - .elf
+
+suspicious_names:
+  - pattern: '(?i)^(xmrig|xmrig-amd|xmrig-cuda|minerd|xmr-stak|kinsing|kdevtmpfsi|kthreaddk|kswapd0|kswapd00|watchdogs|dbused|solrd|pnscan)$'
+    level: critical
+    description: "发现常见挖矿木马、矿工或伪装系统进程文件名"
+  - pattern: '(?i)^(libsystem\.so|ld\.so\.preload|bot\.service|\.ICEd-unix|\.ICE-d-unix|\.X11-unix1)$'
+    level: critical
+    description: "发现 Kinsing/LD_PRELOAD Rootkit 或隐藏目录相关文件名"
+  - pattern: '(?i)^(fscan|kscan|vscan|nmap|masscan|zmap|goby|ladon|naabu|nuclei|afrog|ehole|subfinder|ffuf|dirsearch|gobuster)$'
+    level: high
+    description: "发现常见内网探测、资产识别或漏洞扫描工具文件名"
+  - pattern: '(?i)^(frpc|frps|nps|npc|chisel|gost|ew|ew_for_linux|ew_for_win|regeorg|neo-regeorg|iox|ngrok|cloudflared|stowaway|ligolo|venom|plink)$'
+    level: high
+    description: "发现常见代理隧道、端口转发或内网穿透工具文件名"
+  - pattern: '(?i)(mimikatz|procdump|nanodump|laZagne|seatbelt|rubeus|sharpdump|sharpwmi|sharphound|bloodhound|linpeas|winpeas|linux-exploit-suggester)'
+    level: high
+    description: "发现凭据窃取、枚举、横向移动或提权工具文件名"
+  - pattern: '(?i)(cobaltstrike|(^|[^a-z])beacon([^a-z]|$)|sliver-(server|client)|havoc|meterpreter|msfvenom|shellcode)'
+    level: high
+    description: "发现 C2/后渗透框架相关命名"
+  - pattern: '(?i)(behinder|godzilla|antsword|chopper|caidao|webshell|cmdshell|jspxcms|jspx?shell|aspx?shell|php.?shell)'
+    level: high
+    description: "发现常见 Webshell 工具或 Webshell 命名"
+  - pattern: '(?i)^(kworker|kthreadd|migration|systemd|sshd|cron|rsyncd|dbus-daemon)$'
+    level: medium
+    description: "发现伪装成系统进程名称的落地文件"
+
+suspicious_path_patterns:
+  - pattern: '(?i)(/tmp|/var/tmp|/dev/shm|/run/shm|\\temp\\|\\users\\public\\).*(xmrig|kinsing|kdevtmpfsi|minerd|frpc|frps|nps|npc|chisel|ngrok|gost|regeorg|fscan|kscan|masscan|nmap)'
+    level: high
+    description: "可疑落点发现矿工、扫描器或代理隧道工具"
+  - pattern: '(?i)^/etc/(ld\.so\.preload|libsystem\.so|kinsing)$'
+    level: critical
+    description: "Kinsing/LD_PRELOAD Rootkit 关键落点"
+  - pattern: '(?i)^/(lib|usr/lib|etc)/systemd/system/(bot|xmrig|kinsing|kdevtmpfsi|update|sysupdate|systemd-update|aliyun|watchdog).*\.service$'
+    level: high
+    description: "可疑 systemd 服务文件名"
+  - pattern: '(?i)(/etc/cron\.|/var/spool/cron|/etc/crontab|/etc/anacrontab)'
+    level: medium
+    description: "Linux 计划任务持久化位置"
+  - pattern: '(?i)(/etc/rc\.local|/etc/rc\.d/|/etc/init\.d/|/etc/profile\.d/|/etc/profile$|/root/\.bashrc$|/root/\.profile$)'
+    level: medium
+    description: "Linux 启动脚本、shell profile 或初始化持久化位置"
+  - pattern: '(?i)(/\.config/autostart/|/\.ssh/authorized_keys$)'
+    level: medium
+    description: "用户级启动或 SSH authorized_keys 敏感位置"
+  - pattern: '(?i)(/var/www|/www|/usr/local/nginx/html|/srv/www|/opt/tomcat|/webapps|\\inetpub\\wwwroot).*(/upload|/uploads|/cache|/tmp|/assets|/static|/images|/plugins|/themes).*\.(php|phtml|jsp|jspx|asp|aspx|ashx|cer|asa)$'
+    level: high
+    description: "Web 根目录上传/缓存/静态目录中出现可执行脚本"
+  - pattern: '(?i)(/webapps/ROOT/|/manager/html|/solr/admin|/weblogic|/jenkins|/confluence|/jira).*\.(jsp|jspx|war|jar|php)$'
+    level: high
+    description: "常见中间件目录中出现可执行脚本或组件"
+  - pattern: '(?i)(\\windows\\system32\\tasks\\|\\programdata\\microsoft\\windows\\start menu\\programs\\startup\\|\\users\\[^\\]+\\appdata\\roaming\\microsoft\\windows\\start menu\\programs\\startup\\)'
+    level: medium
+    description: "Windows 计划任务或启动项位置"
+  - pattern: '(?i)(\\users\\public\\|\\programdata\\|\\windows\\temp\\|\\temp\\).*(mimikatz|procdump|nanodump|frpc|nps|npc|chisel|ngrok|fscan|kscan|beacon|payload)'
+    level: high
+    description: "Windows 可疑落点发现后渗透、代理或探测工具"
+sensitive_files:
+  - pattern: '(?i)/\.ssh/authorized_keys$'
+    level: medium
+    description: "发现 SSH authorized_keys，需复核是否存在异常公钥"
+  - pattern: '(?i)/etc/(crontab|anacrontab|cron\.d/.*|cron\.hourly/.*|cron\.daily/.*|cron\.weekly/.*|cron\.monthly/.*)$'
+    level: medium
+    description: "发现系统级 cron 配置，需复核是否存在异常任务"
+  - pattern: '(?i)^/etc/ld\.so\.preload$'
+    level: critical
+    description: "发现 ld.so.preload，需复核是否存在 LD_PRELOAD Rootkit"
+  - pattern: '(?i)^/etc/hosts$'
+    level: low
+    description: "hosts 文件可被用于劫持或阻断安全更新，需按需复核"
+  - pattern: '(?i)^/etc/(passwd|shadow|sudoers)$'
+    level: medium
+    description: "账户/权限关键文件，需结合最近修改时间复核"
+  - pattern: '(?i)(/etc/systemd/system/.*\.service|/lib/systemd/system/.*\.service|/usr/lib/systemd/system/.*\.service)$'
+    level: low
+    description: "systemd 服务文件，需复核 ExecStart 是否异常"
+
+suspicious_content:
+  - pattern: '(?i)(bash\s+-i|/dev/tcp/|nc\s+.*-e|ncat\s+.*-e|socat\s+.*exec:|mkfifo\s+.*(/bin/)?(sh|bash))'
+    level: high
+    description: "文件内容包含反弹 Shell 特征"
+    extensions: [.sh, .bash, .zsh, .py, .pl, .php, .phtml, .command, .cron]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system|/etc/init\.d|/etc/profile|/etc/rc\.local)'
+      - '(?i)(/var/www|/www|/usr/local/nginx/html|/srv/www|/opt/tomcat|/webapps|\\inetpub\\wwwroot)'
+      - '(?i)(/library/launchagents|/library/launchdaemons|\\windows\\system32\\tasks|\\users\\public\\|\\programdata\\|\\windows\\temp\\)'
+  - pattern: '(?i)(curl|wget).*(\|\s*(sh|bash|zsh)|/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+    level: high
+    description: "文件内容包含下载并执行或落地到临时目录的行为"
+    extensions: [.sh, .bash, .zsh, .command, .plist, .service]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system|/etc/init\.d|/etc/profile|/etc/rc\.local)'
+      - '(?i)(/library/launchagents|/library/launchdaemons|\\windows\\system32\\tasks|\\users\\public\\|\\programdata\\|\\windows\\temp\\)'
+  - pattern: '(?i)((base64\s+-d|frombase64string|certutil.*-decode).*(eval|exec|iex|/tmp/|/var/tmp/|/dev/shm/))'
+    level: medium
+    description: "文件内容包含编码解码后执行或落地到可疑目录的特征"
+    extensions: [.sh, .py, .pl, .php, .phtml, .js, .ps1, .vbs, .wsf]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system)'
+      - '(?i)(/var/www|/www|/usr/local/nginx/html|/srv/www|/opt/tomcat|/webapps|\\inetpub\\wwwroot)'
+      - '(?i)(\\users\\public\\|\\programdata\\|\\windows\\temp\\)'
+  - pattern: '(?i)(/etc/libsystem\.so|/etc/ld\.so\.preload)'
+    level: critical
+    description: "文件内容包含 LD_PRELOAD Rootkit 关键痕迹"
+    paths:
+      - '(?i)^/etc/'
+  - pattern: '(?i)(stratum\+tcp|stratum\+ssl|supportxmr|hashvault|moneroocean|c3pool|nanopool|xmrig.*(donate-level|algo|pool)|xmr-stak)'
+    level: high
+    description: "文件内容包含挖矿配置、矿池或钱包特征"
+    extensions: [.json, .conf, .config, .sh, .service, .plist]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system)'
+      - '(?i)(/opt/|/usr/local/bin|/usr/local/sbin|\\programdata\\|\\users\\public\\)'
+  - pattern: '(?i)((server_addr\s*=.*remote_port\s*=)|(transport\s*=.*socks5)|(chisel\s+client\s+\S+)|(gost\s+-L\s+)|(frpc|frps)\s+-c|(nps|npc)\s+(-server|-config|start)|reverse_proxy\s+https?://)'
+    level: high
+    description: "文件内容包含代理隧道或端口转发配置"
+    extensions: [.ini, .conf, .config, .yaml, .yml, .json, .sh, .service, .plist]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system|/library/launchagents|/library/launchdaemons)'
+      - '(?i)(/opt/|/usr/local/bin|/usr/local/sbin|\\programdata\\|\\users\\public\\|\\windows\\system32\\tasks)'
+  - pattern: '(?i)(history\s+-c|unset\s+HISTFILE|truncate\s+-s\s+0\s+/var/log|>\s*/var/log/(secure|auth\.log|messages|wtmp|btmp|lastlog)|journalctl\s+--vacuum)'
+    level: high
+    description: "文件内容包含清理历史记录或系统日志行为"
+    extensions: [.sh, .bash, .zsh, .py, .pl, .service]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system|/etc/init\.d|/etc/profile|/etc/rc\.local)'
+  - pattern: '(?i)(systemctl\s+stop\s+(firewalld|iptables)|ufw\s+disable|iptables\s+-F|pkill\s+.*(aegis|aliyun|qcloud|ydservice|barad_agent)|chattr\s+(\+|\-)i)'
+    level: high
+    description: "文件内容包含关闭防火墙/云安全组件或 chattr 锁定痕迹"
+    extensions: [.sh, .bash, .zsh, .py, .pl, .service]
+    paths:
+      - '(?i)(/tmp/|/var/tmp/|/dev/shm/|/run/shm/)'
+      - '(?i)(/etc/cron|/var/spool/cron|/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system|/etc/init\.d|/etc/rc\.local)'
+  - pattern: '(?i)(eval\s*\(\s*\$_(POST|GET|REQUEST)|assert\s*\(\s*\$_(POST|GET|REQUEST)|base64_decode\s*\(\s*\$_|Runtime\.getRuntime\(\)\.exec|ProcessBuilder\s*\(|cmd\.exe\s+/c|passthru\s*\(|shell_exec\s*\()'
+    level: high
+    description: "文件内容包含常见 Webshell 执行函数组合"
+    extensions: [.php, .phtml, .jsp, .jspx, .asp, .aspx, .ashx, .cer, .asa]
+    paths:
+      - '(?i)(/var/www|/www|/usr/local/nginx/html|/srv/www|/opt/tomcat|/webapps|\\inetpub\\wwwroot)'
+  - pattern: '(?i)(ProgramArguments|Program)\s*.*(/tmp/|/var/tmp/|/Users/Shared/|/Library/Caches/)'
+    level: high
+    description: "macOS plist 启动项指向可疑落点"
+    extensions: [.plist]
+    paths:
+      - '(?i)(/library/launchagents|/library/launchdaemons|/users/.*/library/launchagents)'
+  - pattern: '(?i)(ExecStart\s*=.*(/tmp|/var/tmp|/dev/shm|/run/shm)|ExecStart\s*=.*(curl|wget).*\|\s*(sh|bash)|WantedBy=multi-user\.target.*(xmrig|kinsing|frpc|nps|chisel))'
+    level: high
+    description: "systemd 服务指向可疑落点、下载执行或矿工/隧道工具"
+    extensions: [.service]
+    paths:
+      - '(?i)(/etc/systemd/system|/lib/systemd/system|/usr/lib/systemd/system)'
+
+allowed_suid_paths:
+  - /usr/bin/su
+  - /usr/bin/sudo
+  - /usr/bin/passwd
+  - /usr/bin/chsh
+  - /usr/bin/chfn
+  - /usr/bin/newgrp
+  - /usr/bin/at
+  - /usr/bin/atq
+  - /usr/bin/atrm
+  - /usr/bin/batch
+  - /usr/bin/crontab
+  - /usr/bin/login
+  - /usr/bin/quota
+  - /usr/libexec/ssh-keysign

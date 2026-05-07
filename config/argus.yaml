@@ -1,0 +1,10 @@
+argus:
+  default_profile: standard
+  rules_dir: .rule
+  output_dir: reports
+  network:
+    default_no_network: true
+  reports:
+    json: true
+    html: true
+    jsonl: false
