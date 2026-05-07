@@ -34,8 +34,9 @@ concurrency:
 
 env:
   APP_NAME: argus
-  RELEASE_VERSION: ${{ inputs.release_tag || github.ref_name }}
-  BUNDLE_RULES: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.bundle_rules == true }}
+  YARA_X_VERSION: v1.16.0
+  RELEASE_VERSION: ${{ inputs.release_tag || (contains(github.event.head_commit.message, '[publish-v3.0.0]') && 'v3.0.0') || github.ref_name }}
+  BUNDLE_RULES: ${{ startsWith(github.ref, 'refs/tags/v') || inputs.bundle_rules == true || contains(github.event.head_commit.message, '[publish-v3.0.0]') }}
 
 jobs:
   test:
@@ -51,10 +52,41 @@ jobs:
           go-version-file: go.mod
           cache: true
 
-      - name: Install libyara
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libyara-dev pkg-config
+          sudo apt-get install -y build-essential curl git pkg-config
+
+      - name: Set up Rust
+        run: |
+          if ! command -v cargo >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build YARA-X CAPI
+        shell: bash
+        run: |
+          set -euo pipefail
+          capi_dir="$RUNNER_TEMP/yara-x-capi"
+          git clone --depth 1 --branch "$YARA_X_VERSION" https://github.com/VirusTotal/yara-x.git "$RUNNER_TEMP/yara-x"
+          cargo build --release --package yara-x-capi --manifest-path "$RUNNER_TEMP/yara-x/Cargo.toml"
+          mkdir -p "$capi_dir/include" "$capi_dir/lib/pkgconfig"
+          cp "$RUNNER_TEMP/yara-x/target/release/libyara_x_capi.a" "$capi_dir/lib/"
+          cp "$RUNNER_TEMP/yara-x/capi/include/yara_x.h" "$capi_dir/include/"
+          cat > "$capi_dir/lib/pkgconfig/yara_x_capi.pc" <<EOF
+          prefix=$capi_dir
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib
+          includedir=\${prefix}/include
+          Name: yara_x_capi
+          Description: YARA-X C API static package
+          Version: 1.16.0
+          Libs: \${libdir}/libyara_x_capi.a -ldl -lpthread -lm
+          Cflags: -I\${includedir}
+          EOF
+          echo "PKG_CONFIG_PATH=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_LIBDIR=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
 
       - name: Test
         run: go test ./...
@@ -70,9 +102,6 @@ jobs:
           - target: linux-amd64
             os: ubuntu-latest
             archive: tar.gz
-          - target: darwin-amd64
-            os: macos-13
-            archive: tar.gz
           - target: darwin-arm64
             os: macos-14
             archive: tar.gz
@@ -85,22 +114,78 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Set up Go
+        if: runner.os != 'Windows'
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
 
-      - name: Install libyara on Linux
+      - name: Install Linux build dependencies
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libyara-dev pkg-config
+          sudo apt-get install -y build-essential curl git musl-tools pkg-config
 
-      - name: Install libyara on macOS
+      - name: Set up Rust on Unix
+        if: runner.os != 'Windows'
+        run: |
+          if ! command -v cargo >/dev/null 2>&1; then
+            curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --profile minimal
+          fi
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+
+      - name: Build YARA-X CAPI on Linux
+        if: runner.os == 'Linux'
+        shell: bash
+        run: |
+          set -euo pipefail
+          capi_dir="$RUNNER_TEMP/yara-x-capi"
+          rustup target add x86_64-unknown-linux-musl
+          git clone --depth 1 --branch "$YARA_X_VERSION" https://github.com/VirusTotal/yara-x.git "$RUNNER_TEMP/yara-x"
+          cargo build --release --package yara-x-capi --target x86_64-unknown-linux-musl --manifest-path "$RUNNER_TEMP/yara-x/Cargo.toml"
+          mkdir -p "$capi_dir/include" "$capi_dir/lib/pkgconfig"
+          cp "$RUNNER_TEMP/yara-x/target/x86_64-unknown-linux-musl/release/libyara_x_capi.a" "$capi_dir/lib/"
+          cp "$RUNNER_TEMP/yara-x/capi/include/yara_x.h" "$capi_dir/include/"
+          cat > "$capi_dir/lib/pkgconfig/yara_x_capi.pc" <<EOF
+          prefix=$capi_dir
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib
+          includedir=\${prefix}/include
+          Name: yara_x_capi
+          Description: YARA-X C API static package
+          Version: 1.16.0
+          Libs: \${libdir}/libyara_x_capi.a -ldl -lpthread -lm -lc
+          Cflags: -I\${includedir}
+          EOF
+          echo "PKG_CONFIG_PATH=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_LIBDIR=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
+
+      - name: Build YARA-X CAPI on macOS
         if: runner.os == 'macOS'
-        run: brew install yara pkg-config
+        shell: bash
+        run: |
+          set -euo pipefail
+          capi_dir="$RUNNER_TEMP/yara-x-capi"
+          git clone --depth 1 --branch "$YARA_X_VERSION" https://github.com/VirusTotal/yara-x.git "$RUNNER_TEMP/yara-x"
+          cargo build --release --package yara-x-capi --manifest-path "$RUNNER_TEMP/yara-x/Cargo.toml"
+          mkdir -p "$capi_dir/include" "$capi_dir/lib/pkgconfig"
+          cp "$RUNNER_TEMP/yara-x/target/release/libyara_x_capi.a" "$capi_dir/lib/"
+          cp "$RUNNER_TEMP/yara-x/capi/include/yara_x.h" "$capi_dir/include/"
+          cat > "$capi_dir/lib/pkgconfig/yara_x_capi.pc" <<EOF
+          prefix=$capi_dir
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib
+          includedir=\${prefix}/include
+          Name: yara_x_capi
+          Description: YARA-X C API static package
+          Version: 1.16.0
+          Libs: \${libdir}/libyara_x_capi.a -liconv -lSystem -lc -lm
+          Cflags: -I\${includedir}
+          EOF
+          echo "PKG_CONFIG_PATH=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
+          echo "PKG_CONFIG_LIBDIR=$capi_dir/lib/pkgconfig" >> "$GITHUB_ENV"
 
-      - name: Install libyara on Windows
+      - name: Install Windows build dependencies
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
@@ -109,29 +194,11 @@ jobs:
           install: >-
             git
             base-devel
-            autotools
-            make
             zip
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-go
             mingw-w64-x86_64-pkgconf
-            mingw-w64-x86_64-openssl
-            mingw-w64-x86_64-jansson
-            mingw-w64-x86_64-file
-            mingw-w64-x86_64-zlib
-
-      - name: Build libyara on Windows
-        if: runner.os == 'Windows'
-        shell: msys2 {0}
-        run: |
-          set -euo pipefail
-          git clone --depth 1 --branch v4.5.4 https://github.com/VirusTotal/yara.git /tmp/yara
-          cd /tmp/yara
-          ./bootstrap.sh
-          ./configure --prefix=/mingw64 --enable-magic --with-crypto
-          make -j"$(nproc)"
-          make install
-          pkg-config --modversion yara
+            mingw-w64-x86_64-rust
 
       - name: Build and package on Unix
         if: runner.os != 'Windows'
@@ -146,23 +213,32 @@ jobs:
           build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           pkg="argus-${version}-${{ matrix.target }}"
           pkg_dir="dist/${pkg}"
+          mkdir -p "$pkg_dir"
 
-          mkdir -p "${pkg_dir}"
-          CGO_ENABLED=1 go build \
-            -trimpath \
-            -ldflags "-s -w -buildid= -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
-            -o "${pkg_dir}/argus" \
-            ./cmd/argus
-
-          cp -R config "${pkg_dir}/config"
-          cp README.md LICENSE SECURITY.md FALSE_POSITIVE.md PRIVACY.md RULES_LICENSE.md "${pkg_dir}/"
-
-          if [[ "${BUNDLE_RULES}" == "true" ]]; then
-            "${pkg_dir}/argus" --rules-dir "${pkg_dir}/.rule" rules update --source upstream
-            "${pkg_dir}/argus" --rules-dir "${pkg_dir}/.rule" rules verify
+          if [[ "${{ matrix.target }}" == "linux-amd64" ]]; then
+            CGO_ENABLED=1 GOOS=linux GOARCH=amd64 CC=musl-gcc \
+              go build -a -tags static_link -trimpath \
+                -ldflags "-s -w -buildid= -linkmode external -extldflags '-static' -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
+                -o "$pkg_dir/argus" ./cmd/argus
+            file "$pkg_dir/argus"
+          else
+            CGO_ENABLED=1 GOOS=darwin GOARCH=arm64 \
+              go build -a -tags static_link -trimpath \
+                -ldflags "-s -w -buildid= -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
+                -o "$pkg_dir/argus" ./cmd/argus
+            otool -L "$pkg_dir/argus"
           fi
 
-          tar -C dist -czf "dist/${pkg}.tar.gz" "${pkg}"
+          chmod +x "$pkg_dir/argus"
+          cp -R config "$pkg_dir/config"
+          cp README.md README_EN.md README_JP.md LICENSE SECURITY.md FALSE_POSITIVE.md PRIVACY.md RULES_LICENSE.md "$pkg_dir/"
+
+          if [[ "$BUNDLE_RULES" == "true" ]]; then
+            "$pkg_dir/argus" --rules-dir "$pkg_dir/.rule" rules update --source upstream
+            "$pkg_dir/argus" --rules-dir "$pkg_dir/.rule" rules verify
+          fi
+
+          tar -C dist -czf "dist/${pkg}.tar.gz" "$pkg"
           shasum -a 256 "dist/${pkg}.tar.gz" > "dist/${pkg}.tar.gz.sha256"
 
       - name: Build and package on Windows
@@ -179,57 +255,46 @@ jobs:
           build_time="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
           pkg="argus-${version}-${{ matrix.target }}"
           pkg_dir="dist/${pkg}"
+          capi_dir="/tmp/yara-x-capi"
+          mkdir -p "$pkg_dir" "$capi_dir/include" "$capi_dir/lib/pkgconfig"
 
-          mkdir -p "${pkg_dir}"
-          command -v go
-          command -v gcc
-          command -v pkg-config
-          pkg-config --modversion yara
-          pkg-config --cflags --libs yara
+          git clone --depth 1 --branch "$YARA_X_VERSION" https://github.com/VirusTotal/yara-x.git /tmp/yara-x
+          cargo build --release --package yara-x-capi --target x86_64-pc-windows-gnu --manifest-path /tmp/yara-x/Cargo.toml --target-dir /tmp/yara-x-target
+          cp /tmp/yara-x-target/x86_64-pc-windows-gnu/release/libyara_x_capi.a "$capi_dir/lib/"
+          cp /tmp/yara-x/capi/include/yara_x.h "$capi_dir/include/"
+          cat > "$capi_dir/lib/pkgconfig/yara_x_capi.pc" <<EOF
+          prefix=$capi_dir
+          exec_prefix=\${prefix}
+          libdir=\${exec_prefix}/lib
+          includedir=\${prefix}/include
+          Name: yara_x_capi
+          Description: YARA-X C API static package
+          Version: 1.16.0
+          Libs: \${libdir}/libyara_x_capi.a -lws2_32 -lbcrypt -lntdll -luserenv -ladvapi32 -lcrypt32 -lsecur32
+          Cflags: -I\${includedir}
+          EOF
 
           CGO_ENABLED=1 \
+          GOOS=windows \
+          GOARCH=amd64 \
           CC=gcc \
           PKG_CONFIG=pkg-config \
-          PKG_CONFIG_PATH=/mingw64/lib/pkgconfig \
-          go build \
-            -trimpath \
-            -ldflags "-s -w -buildid= -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
-            -o "${pkg_dir}/argus.exe" \
-            ./cmd/argus
-          test -f "${pkg_dir}/argus.exe"
+          PKG_CONFIG_PATH="$capi_dir/lib/pkgconfig" \
+          PKG_CONFIG_LIBDIR="$capi_dir/lib/pkgconfig" \
+          go build -a -tags static_link -trimpath \
+            -ldflags "-s -w -buildid= -linkmode external -extldflags '-static' -X main.version=${version} -X main.commit=${commit} -X main.buildTime=${build_time}" \
+            -o "$pkg_dir/argus.exe" ./cmd/argus
+          test -f "$pkg_dir/argus.exe"
 
-          cp -R config "${pkg_dir}/config"
-          cp README.md LICENSE SECURITY.md FALSE_POSITIVE.md PRIVACY.md RULES_LICENSE.md "${pkg_dir}/"
+          cp -R config "$pkg_dir/config"
+          cp README.md README_EN.md README_JP.md LICENSE SECURITY.md FALSE_POSITIVE.md PRIVACY.md RULES_LICENSE.md "$pkg_dir/"
 
-          dll_patterns=(
-            'libyara*.dll'
-            'libcrypto*.dll'
-            'libssl*.dll'
-            'libwinpthread-1.dll'
-            'libjansson*.dll'
-            'libmagic*.dll'
-            'libgnurx*.dll'
-            'libintl*.dll'
-            'libiconv*.dll'
-            'libpcre2-8-0.dll'
-            'zlib1.dll'
-            'libgcc_s_seh-1.dll'
-          )
-          for pattern in "${dll_patterns[@]}"; do
-            for dll in /mingw64/bin/${pattern}; do
-              [[ -e "${dll}" ]] && cp "${dll}" "${pkg_dir}/"
-            done
-          done
-
-          if [[ "${BUNDLE_RULES}" == "true" ]]; then
-            "${pkg_dir}/argus.exe" --rules-dir "${pkg_dir}/.rule" rules update --source upstream
-            "${pkg_dir}/argus.exe" --rules-dir "${pkg_dir}/.rule" rules verify
+          if [[ "$BUNDLE_RULES" == "true" ]]; then
+            "$pkg_dir/argus.exe" --rules-dir "$pkg_dir/.rule" rules update --source upstream
+            "$pkg_dir/argus.exe" --rules-dir "$pkg_dir/.rule" rules verify
           fi
 
-          (
-            cd dist
-            zip -qr "${pkg}.zip" "${pkg}"
-          )
+          (cd dist && zip -qr "${pkg}.zip" "$pkg")
           sha256sum "dist/${pkg}.zip" > "dist/${pkg}.zip.sha256"
 
       - name: Upload artifact
@@ -245,7 +310,7 @@ jobs:
   publish:
     name: publish release
     needs: build
-    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag != '')
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.publish_release && inputs.release_tag != '') || contains(github.event.head_commit.message, '[publish-v3.0.0]')
     runs-on: ubuntu-latest
     steps:
       - name: Download artifacts
@@ -257,6 +322,15 @@ jobs:
       - name: Publish GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ inputs.release_tag || github.ref_name }}
+          tag_name: ${{ env.RELEASE_VERSION }}
+          name: Argus ${{ env.RELEASE_VERSION }}
+          body: |
+            ## Argus ${{ env.RELEASE_VERSION }}
+
+            - 迁移到 YARA-X Go binding，argus / argus.exe 单文件集成 YARA-X CAPI。
+            - 发布包内置同级隐藏 .rule/ 全量规则库，首次离线可直接扫描。
+            - 保持既有扫描输出：平台过滤、Webshell/Malware 规则加载统计、规则跳过策略、命中规则名和报告字段兼容。
+            - 本次发布包提供 macOS arm64、Linux amd64、Windows amd64 以及 SHA256 校验文件。
           files: release-assets/*
-          generate_release_notes: true
+          overwrite_files: true
+          fail_on_unmatched_files: true
